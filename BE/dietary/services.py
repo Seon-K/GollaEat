@@ -1,5 +1,5 @@
 from .catalog import get_catalog
-from .models import SupportRule
+from .models import Criterion, SupportRule
 
 PRIORITY = {'match': 0, 'needs_check': 1, 'mismatch': 2}
 
@@ -8,12 +8,29 @@ def aggregate(results):
     return max((r['status'] for r in results), key=PRIORITY.get, default='match')
 
 
-def evaluate(profile, component_id, modifications=None):
+def resolve_criteria(profile, codes):
+    """None uses the saved profile; a list supplies temporary criterion codes."""
+    if codes is None:
+        return list(profile.criteria.all())
+    if not isinstance(codes, list) or any(not isinstance(code, str) or not code for code in codes):
+        raise ValueError('criteria must be a list of criterion codes')
+    selected = list(Criterion.objects.filter(code__in=codes, active=True))
+    if len(selected) != len(set(codes)):
+        raise ValueError('Unknown or inactive criterion')
+    for criterion in selected:
+        if criterion.kind != 'preference':
+            rule = SupportRule.objects.filter(criterion=criterion, enabled=True).exclude(source='').first()
+            if not rule or not rule.excluded_tags:
+                raise ValueError('Unsupported criterion: ' + criterion.code)
+    return selected
+
+
+def evaluate(profile, component_id, modifications=None, *, criteria=None):
     data = get_catalog().get_component(component_id)
     reasons = []
     unknown = []
     problems = set()
-    criteria = list(profile.criteria.all())
+    criteria = resolve_criteria(profile, criteria)
     for criterion in criteria:
         if criterion.kind == 'preference':
             continue
@@ -56,8 +73,9 @@ def evaluate(profile, component_id, modifications=None):
             'sort_key': [PRIORITY[status], -score, component_id]}
 
 
-def rank_menus(profile, menu_ids):
-    return sorted((evaluate(profile, mid) for mid in menu_ids), key=lambda r: r['sort_key'])
+def rank_menus(profile, menu_ids, *, criteria=None):
+    resolve_criteria(profile, criteria)
+    return sorted((evaluate(profile, mid, criteria=criteria) for mid in menu_ids), key=lambda r: r['sort_key'])
 
 
 def check_order(profile, components):
