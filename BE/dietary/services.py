@@ -74,5 +74,6 @@ def communication(profile, components):
     return {'status': order['status'], 'text': f'알레르기: {allergies}. 기타 섭취 제한: {other}. '
             f'선택 구성: {", ".join(c["id"] for c in components)}. '
             f'확인 필요: {", ".join(unknown) or "추가 미확인 항목 없음"}. '
-            '해당 재료 포함 여부와 조리 중 교차접촉 가능성을 확인해 주세요. 재료 제거 가능 여부도 확인 부탁드립니다.',
+            '혹시 주문하려는 메뉴에 위 재료들이 들어가는지 확인해 주실 수 있을까요? '
+            '소스나 양념, 육수에 들어가는 재료도 함께 알려주시면 정말 감사하겠습니다.',
             'order': order}
