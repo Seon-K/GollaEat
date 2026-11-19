@@ -126,7 +126,7 @@ def chat(message, state, parse=parse_demo, search=demo_search):
         return state, {"question": change["question"]}
     if not next_state.get("place") and not next_state.get("restaurant"):
         return next_state, {"question": "어느 장소 근처에서 찾을까요?"}
-    if not (next_state.get("allergens") or next_state.get("ingredients")):
+    if not (next_state.get("allergens") or next_state.get("ingredients") or next_state.get("criteria")):
         return next_state, {"question": "어떤 알레르기나 제한 재료를 적용할까요?"}
     return next_state, search(next_state)
 
@@ -134,19 +134,38 @@ def chat(message, state, parse=parse_demo, search=demo_search):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--gemini", action="store_true", help="Gemini로 질문을 해석합니다.")
+    parser.add_argument("--backend", action="store_true", help="Django 검색·판정 연결을 사용합니다.")
+    parser.add_argument("--profile-id", help="백엔드 모드에서 사용할 기존 Profile UUID")
     args = parser.parse_args()
     if args.gemini and not os.getenv("GEMINI_API_KEY", "").strip():
         parser.error("GEMINI_API_KEY 환경변수가 필요합니다.")
     parse = parse_gemini if args.gemini else parse_demo
     state = {"radius_m": 1000}
-    print("골라잇 | 가상 검색 데이터 | 종료: /끝")
+    search = demo_search
+    if args.backend:
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "BE"))
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+        import django
+        django.setup()
+        from backend import BackendSearch
+        from dietary.models import Profile
+        if not args.profile_id:
+            parser.error("--backend에는 기존 --profile-id가 필요합니다.")
+        profile = Profile.objects.filter(pk=args.profile_id).first()
+        if profile is None:
+            parser.error("해당 프로필이 없습니다.")
+        search = BackendSearch(profile)
+        state = search.initial_state()
+    print("골라잇 | " + ("백엔드 연결" if args.backend else "가상 검색 데이터") + " | 종료: /끝")
     while True:
         try:
             message = input("> ").strip()
             if message == "/끝":
                 break
             if message:
-                state, result = chat(message, state, parse)
+                state, result = chat(message, state, parse, search)
                 print(format_response(result))
                 print(json.dumps({"조건": state, "응답": result}, ensure_ascii=False, indent=2))
         except (EOFError, KeyboardInterrupt):
