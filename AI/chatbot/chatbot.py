@@ -31,27 +31,48 @@ def parse_demo(message):
     return changes or {"question": "예시: 순천향대 근처에서 우유 알레르기가 있는 내가 먹을 김밥 찾아줘"}
 
 
-def parse_gemini(message):
+def parse_gemini(message, *, debug=False):
     key = os.getenv("GEMINI_API_KEY", "").strip()
     if not key:
         raise ValueError("GEMINI_API_KEY 환경변수가 필요합니다.")
     prompt = ("한국어 식당 검색 입력을 JSON으로 변환한다. 이번 문장에 명시된 변경만 반환한다. "
               "place는 장소, menu는 메뉴명, restaurant는 특정 매장명, allergens는 명시한 알레르겐 배열, "
-              "ingredients는 추가로 피할 재료 배열이다. 맛집 추천도 검색 요청이다. "
+              "ingredients는 알레르기로 명시하지 않고 피하겠다고 한 재료 배열이다. "
+              "김밥이나 우동 같은 음식명은 menu로 분류한다. 명시된 상호나 지점명만 restaurant로 분류한다. "
+              "사용자가 알레르기가 있다고 밝힌 식품은 문장 속 수식어에 있어도 allergens에 모두 넣는다. "
+              "알레르기가 명시되면 그 식품을 ingredients에 중복해서 넣지 않는다. "
+              "맛집 추천도 검색 요청이다. "
               "비건 등 유형만 있거나 조건 해제나 의도가 모호하면 question에 확인 질문만 반환한다. "
-              "식당이나 성분을 추측하지 않는다. 언급하지 않은 필드는 생략한다.")
-    properties = {
-        field: {"type": "STRING"}
-        for field in ("place", "menu", "restaurant", "question")
+              "식당이나 성분을 추측하지 않는다. 언급하지 않은 필드는 생략한다.\n"
+              '예시 입력: 순천향대 근처에서 우유 알레르기가 있는 내가 먹을 김밥 찾아줘\n'
+              '예시 출력: {"place":"순천향대","menu":"김밥","allergens":["우유"]}\n'
+              '예시 입력: 우동으로 바꿔줘\n'
+              '예시 출력: {"menu":"우동"}\n'
+              '예시 입력: 김밥천국 온양점에서 달걀 빼고 라면 찾아줘\n'
+              '예시 출력: {"restaurant":"김밥천국 온양점","menu":"라면","ingredients":["달걀"]}')
+    descriptions = {
+        "place": "명시된 검색 기준 장소 이름만. 예: 순천향대",
+        "menu": "찾거나 변경할 음식 이름만. 예: 김밥, 우동",
+        "allergens": "사용자에게 알레르기가 있다고 명시된 식품 이름 목록. 예: [우유]",
+        "ingredients": "알레르기 언급 없이 피하겠다고 명시한 재료 이름 목록",
+        "restaurant": "명시된 식당 상호 또는 지점명만. 음식명이나 요청 문장을 넣지 말고 상호가 없으면 생략",
+        "question": "의도를 해석할 수 없을 때만 사용할 확인 질문",
     }
-    for field in ("allergens", "ingredients"):
-        properties[field] = {"type": "ARRAY", "items": {"type": "STRING"}}
+    properties = {}
+    for field, description in descriptions.items():
+        schema = {"description": description}
+        if field in ("allergens", "ingredients"):
+            schema.update(type="ARRAY", items={"type": "STRING"})
+        else:
+            schema["type"] = "STRING"
+        properties[field] = schema
     data = {
         "systemInstruction": {"parts": [{"text": prompt}]},
         "contents": [{"role": "user", "parts": [{"text": message}]}],
         "generationConfig": {
             "responseMimeType": "application/json",
-            "responseSchema": {"type": "OBJECT", "properties": properties},
+            "responseSchema": {"type": "OBJECT", "properties": properties,
+                               "propertyOrdering": list(properties)},
         },
     }
     model = quote(os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"), safe="")
@@ -72,7 +93,17 @@ def parse_gemini(message):
         raise ValueError("Gemini가 질문 해석을 완료하지 못했어요.")
     parts = candidates[0].get("content", {}).get("parts", [])
     output = "".join(part.get("text", "") for part in parts if not part.get("thought"))
-    return json.loads(output)
+    if debug:
+        print("[Gemini 원본 JSON]", output)
+    parsed = json.loads(output)
+    if isinstance(parsed, dict):
+        restaurant = parsed.get("restaurant")
+        if isinstance(restaurant, str) and (
+            restaurant.strip().casefold() in {"", "null", "none"}
+            or re.search(r"알레르기.*(?:찾아|추천)|(?:찾아\s*줘|추천해\s*줘)\s*[.!?]*$", restaurant)
+        ):
+            parsed.pop("restaurant")
+    return parsed
 
 
 def demo_search(state):
@@ -134,12 +165,15 @@ def chat(message, state, parse=parse_demo, search=demo_search):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--gemini", action="store_true", help="Gemini로 질문을 해석합니다.")
+    parser.add_argument("--debug-gemini", action="store_true", help="Gemini 원본 JSON을 터미널에 표시합니다.")
     parser.add_argument("--backend", action="store_true", help="Django 검색·판정 연결을 사용합니다.")
     parser.add_argument("--profile-id", help="백엔드 모드에서 사용할 기존 Profile UUID")
     args = parser.parse_args()
     if args.gemini and not os.getenv("GEMINI_API_KEY", "").strip():
         parser.error("GEMINI_API_KEY 환경변수가 필요합니다.")
-    parse = parse_gemini if args.gemini else parse_demo
+    if args.debug_gemini and not args.gemini:
+        parser.error("--debug-gemini는 --gemini와 함께 사용하세요.")
+    parse = (lambda message: parse_gemini(message, debug=args.debug_gemini)) if args.gemini else parse_demo
     state = {"radius_m": 1000}
     search = demo_search
     if args.backend:
