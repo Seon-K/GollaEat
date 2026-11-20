@@ -5,7 +5,7 @@ from .repository import MockMenuRepository, normalize_brand
 
 ALLOWED_PARAMETERS = {'q', 'min_price', 'max_price', 'category', 'sort', 'page', 'limit'}
 SORT_OPTIONS = {'menu_name_asc', 'price_asc', 'price_desc'}
-RESTAURANT_PARAMETERS = {'q', 'brand', 'page', 'limit', 'lat', 'lng', 'radius_km', 'sort'}
+RESTAURANT_PARAMETERS = {'q', 'brand', 'page', 'limit', 'lat', 'lng', 'radius_km', 'sort', 'restaurant_type'}
 
 
 def _coordinate_parameter(params, name, minimum, maximum):
@@ -54,6 +54,8 @@ def _text_parameter(params, name, maximum_length):
 
 def _serialize(menu):
     return {
+        **{key: menu[key] for key in ('description', 'menu_option', 'restaurant_type',
+            'collected_at', 'updated_at', 'source_price_status') if key in menu},
         'menu_id': menu['menu_id'],
         'menu_name': menu['menu_name'],
         'restaurant': {
@@ -164,6 +166,9 @@ def list_restaurants(params, repository):
             raise MenuQueryError('radius_km', 'radius_km must be positive')
 
     restaurants = repository.list_restaurants()
+    restaurant_type = _text_parameter(params, 'restaurant_type', 50)
+    if restaurant_type:
+        restaurants = [r for r in restaurants if r.get('restaurant_type') == restaurant_type]
     normalized_query = query.casefold()
     normalized_brand = normalize_brand(brand)
 
@@ -217,14 +222,15 @@ def get_restaurant_detail(restaurant_id, repository):
     if restaurant is None:
         return None
 
-    menu_references = repository.list_brand_menu_references(restaurant['brand'])
+    menu_references = (repository.list_restaurant_menus(restaurant_id)
+        if hasattr(repository, 'list_restaurant_menus') else repository.list_brand_menu_references(restaurant['brand']))
     return {
         **restaurant,
         'brand_menu_reference': {
-            'match_method': 'normalized_brand_exact',
-            'scope': 'brand_reference_only',
+            'match_method': 'place_id_exact' if hasattr(repository, 'list_restaurant_menus') else 'normalized_brand_exact',
+            'scope': 'restaurant_csv_reference' if hasattr(repository, 'list_restaurant_menus') else 'brand_reference_only',
             'branch_sale_status': 'unverified',
-            'notice': '브랜드 기준 참고 메뉴이며 이 지점의 실제 판매 여부는 확인되지 않았습니다.',
+            'notice': 'CSV 기준 참고 메뉴이며 현재 지점의 실제 판매 여부는 확인되지 않았습니다.',
             'count': len(menu_references),
             'menus': menu_references,
         },

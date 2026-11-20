@@ -21,6 +21,13 @@ class DietaryCatalog:
     }
 
     def get_component(self, component_id):
+        if settings.CATALOG_FINAL_CSV:
+            from .final_repository import get_repository
+            try:
+                menu = get_repository().get_menu(component_id)
+            except CatalogDataError:
+                return None
+            return {'present_tags': [], 'absent_tags': [], 'sources': [], 'preference_tags': []} if menu else None
         repository = CsvCatalogRepository(settings.CATALOG_MENU_CSV, '')
         try:
             menu = repository.get_menu(component_id)
