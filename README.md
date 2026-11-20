@@ -89,6 +89,16 @@ CSV 데이터 가져오기와 주기적인 DB 백업은 별도로 구성해야 �
 
 ## 개발용 배포 (Railway + Supabase)
 
+### GitHub 빌드 확인
+
+`.github/workflows/ci.yml`은 `develop` push, `develop`/`main` 대상 PR에서
+FE·BE Docker 빌드, Caddy 설정 검증, Django 검사와 테스트를 실행합니다.
+GitHub의 Actions 또는 PR Checks에서 성공/실패와 로그를 확인할 수 있습니다.
+운영 비밀키나 DB 연결 없이 SQLite로 검사합니다.
+Railway의 서비스 Variables, 실제 Supabase 연결, 마이그레이션 등 배포 환경에서만
+발생하는 오류는 이 CI로 검사하지 않으며 Railway 배포 로그에서 확인해야 합니다.
+Railway 서비스 설정에서 Wait for CI를 활성화하면 CI 통과 후 배포하도록 할 수 있습니다.
+
 Railway 프로젝트 하나에 `Frontend`, `Backend` 서비스를 따로 만듭니다.
 DB는 개발용 Supabase PostgreSQL을 사용합니다. 외부에 공개하는 개발 서버도
 `DJANGO_DEBUG=false`로 실행합니다. 로컬 실행 방식은 그대로 유지합니다.
