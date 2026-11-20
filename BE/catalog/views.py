@@ -1,0 +1,112 @@
+from django.conf import settings
+from django.http import JsonResponse
+
+from .repository import CatalogDataError, CsvCatalogRepository
+from .services import MenuQueryError, get_restaurant_detail, list_menus, list_restaurants
+from .services import list_restaurant_menus
+
+
+def _csv_repository():
+    return CsvCatalogRepository(settings.CATALOG_MENU_CSV, settings.CATALOG_RESTAURANT_CSV,
+                                settings.CATALOG_COORDINATE_CSVS)
+
+
+def _method_not_allowed():
+    response = JsonResponse(
+        {'error': {'code': 'method_not_allowed', 'message': 'GET method required'}},
+        status=405,
+    )
+    response['Allow'] = 'GET'
+    return response
+
+
+def _catalog_unavailable(exc):
+    return JsonResponse(
+        {'error': {'code': 'catalog_unavailable', 'message': str(exc)}},
+        status=503,
+    )
+
+
+def menus(request):
+    if request.method != 'GET':
+        return _method_not_allowed()
+
+    try:
+        return JsonResponse(list_menus(request.GET))
+    except MenuQueryError as exc:
+        return JsonResponse(
+            {
+                'error': {
+                    'code': 'invalid_query_parameter',
+                    'parameter': exc.parameter,
+                    'message': str(exc),
+                }
+            },
+            status=400,
+        )
+
+
+def menu_detail(request, menu_id):
+    if request.method != 'GET':
+        return _method_not_allowed()
+    try:
+        result = _csv_repository().get_menu(menu_id)
+    except CatalogDataError as exc:
+        return _catalog_unavailable(exc)
+    if result is None:
+        return JsonResponse(
+            {'error': {'code': 'menu_not_found', 'message': 'menu not found'}}, status=404,
+        )
+    return JsonResponse(result)
+
+
+def restaurants(request):
+    if request.method != 'GET':
+        return _method_not_allowed()
+    try:
+        return JsonResponse(list_restaurants(request.GET, _csv_repository()))
+    except MenuQueryError as exc:
+        return JsonResponse(
+            {
+                'error': {
+                    'code': 'invalid_query_parameter',
+                    'parameter': exc.parameter,
+                    'message': str(exc),
+                }
+            },
+            status=400,
+        )
+    except CatalogDataError as exc:
+        return _catalog_unavailable(exc)
+
+
+def restaurant_detail(request, restaurant_id):
+    if request.method != 'GET':
+        return _method_not_allowed()
+    try:
+        result = get_restaurant_detail(restaurant_id, _csv_repository())
+    except CatalogDataError as exc:
+        return _catalog_unavailable(exc)
+    if result is None:
+        return JsonResponse(
+            {'error': {'code': 'restaurant_not_found', 'message': 'restaurant not found'}},
+            status=404,
+        )
+    return JsonResponse(result)
+
+
+def restaurant_menus(request, restaurant_id):
+    if request.method != 'GET':
+        return _method_not_allowed()
+    try:
+        result = list_restaurant_menus(restaurant_id, request.GET, _csv_repository())
+    except MenuQueryError as exc:
+        return JsonResponse({'error': {'code': 'invalid_query_parameter',
+                             'parameter': exc.parameter, 'message': str(exc)}}, status=400)
+    except CatalogDataError as exc:
+        return _catalog_unavailable(exc)
+    if result is None:
+        return JsonResponse({'error': {'code': 'restaurant_not_found',
+                             'message': 'restaurant not found'}}, status=404)
+    return JsonResponse(result)
+

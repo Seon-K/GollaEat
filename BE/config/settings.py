@@ -36,6 +36,7 @@ ALLOWED_HOSTS = [host.strip() for host in os.getenv(
 # Application definition
 
 INSTALLED_APPS = [
+    'catalog',
     'dietary',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -126,3 +127,12 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Read-only catalog CSV sources. Keep machine-specific paths out of source control.
+CATALOG_MENU_CSV = os.getenv('CATALOG_MENU_CSV', '')
+CATALOG_RESTAURANT_CSV = os.getenv('CATALOG_RESTAURANT_CSV', '')
+DIETARY_CATALOG_ADAPTER = 'catalog.adapters.DietaryCatalog'
+CATALOG_COORDINATE_CSVS = tuple(filter(None, (
+    os.getenv('CATALOG_FRANCHISE_COORDINATE_CSV', ''),
+    os.getenv('CATALOG_ASAN_COORDINATE_CSV', ''),
+)))

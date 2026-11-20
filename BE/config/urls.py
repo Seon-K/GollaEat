@@ -19,6 +19,7 @@ from django.urls import include, path
 from .views import health
 
 urlpatterns = [
+    path('api/', include('catalog.urls')),
     path('api/', include('dietary.urls')),
     path('api/health/', health, name='health'),
     path('admin/', admin.site.urls),
