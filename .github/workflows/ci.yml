@@ -1,0 +1,60 @@
+# GitHub Actions 화면에 표시할 워크플로 이름
+name: Build and test
+
+# develop push, develop/main 대상 PR, 수동 실행 시 검사
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+
+# 저장소 코드를 읽는 데 필요한 최소 권한
+permissions:
+  contents: read
+
+# 같은 브랜치 또는 PR에서 새 실행이 시작되면 이전 실행 취소
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # 프론트와 백엔드 검사는 각각 독립적으로 실행
+  frontend:
+    name: Frontend Docker build
+    # GitHub에서 제공하는 Ubuntu 실행 환경 사용
+    runs-on: ubuntu-latest
+    # 한 작업이 15분을 넘으면 중단
+    timeout-minutes: 15
+    steps:
+      # 현재 검사 대상 커밋의 소스 코드 내려받기
+      - uses: actions/checkout@v4
+      # FE/Dockerfile로 의존성 설치 및 React 배포용 빌드
+      - name: Build frontend image
+        run: docker build --tag gollaeat-fe:ci ./FE
+      # 실제 백엔드에 연결하지 않고 Caddy 설정의 유효성 확인
+      # BACKEND_ORIGIN은 설정 검증에만 사용하는 예시 주소
+      - name: Validate Caddy configuration
+        run: >-
+          docker run --rm -e BACKEND_ORIGIN=https://backend.example.com
+          gollaeat-fe:ci caddy validate
+          --config /etc/caddy/Caddyfile --adapter caddyfile
+
+  backend:
+    name: Backend Docker build and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # 현재 검사 대상 커밋의 소스 코드 내려받기
+      - uses: actions/checkout@v4
+      # BE/Dockerfile로 Python 의존성 설치 및 정적 파일 수집
+      - name: Build backend image
+        run: docker build --tag gollaeat-be:ci ./BE
+      # CI 전용 개발 설정으로 Django 구성 오류 검사
+      # 배포 서버의 DJANGO_DEBUG=false 설정과는 별개
+      - name: Check Django configuration
+        run: docker run --rm -e DJANGO_DEBUG=true gollaeat-be:ci python manage.py check
+      # DATABASE_URL 없이 컨테이너 내부 SQLite 테스트 DB 사용
+      # 실제 Supabase 데이터에는 접근하지 않으며 종료 후 컨테이너 삭제
+      - name: Run tests with isolated SQLite database
+        run: docker run --rm -e DJANGO_DEBUG=true gollaeat-be:ci python manage.py test --noinput

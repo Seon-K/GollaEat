@@ -25,6 +25,21 @@ class DietaryTests(TestCase):
     def send(self, client, method, path, body):
         return getattr(client, method)(path, json.dumps(body), content_type='application/json')
 
+    def test_temporary_criteria_preserve_profile(self):
+        self.profile.criteria.clear()
+        result = evaluate(self.profile, 'yes', criteria=['allergen-milk'])
+        self.assertEqual(result['status'], 'mismatch')
+        self.assertEqual(result['reasons'][0]['condition'], 'allergen-milk')
+        self.assertEqual(rank_menus(self.profile, ['yes'], criteria=['allergen-milk'])[0]['status'], 'mismatch')
+        self.assertFalse(self.profile.criteria.exists())
+        self.profile.criteria.add(Criterion.objects.get(code='allergen-milk'))
+        self.assertEqual(evaluate(self.profile, 'yes', criteria=[])['status'], 'match')
+        self.assertEqual(evaluate(self.profile, 'yes')['status'], 'mismatch')
+        self.assertEqual(evaluate(self.profile, 'yes', ['remove-milk'])['status'], 'mismatch')
+        for codes in (['unknown-code'], 'allergen-milk'):
+            with self.assertRaises(ValueError):
+                evaluate(self.profile, 'yes', criteria=codes)
+
     def test_absence_is_not_evidence(self):
         self.assertEqual(evaluate(self.profile, 'unknown')['status'], 'needs_check')
         self.assertEqual(evaluate(self.profile, 'missing')['status'], 'needs_check')
