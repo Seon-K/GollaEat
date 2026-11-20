@@ -87,67 +87,102 @@ CSV 데이터 가져오기와 주기적인 DB 백업은 별도로 구성해야 �
 
 공식 문서: [Supabase DB 연결](https://supabase.com/docs/guides/database/connecting-to-postgres).
 
-## BE 배포 (Render + Supabase)
+## 개발용 배포 (Railway + Supabase)
 
-배포 설정은 `develop`에서 검증한 뒤 `main`에 병합합니다. Render는 `main`을
-배포하도록 연결합니다. 아래 설정은 Render 대시보드에 직접 입력하며,
-`.env` 파일을 만들거나 수정할 필요는 없습니다.
+Railway 프로젝트 하나에 `Frontend`, `Backend` 서비스를 따로 만듭니다.
+DB는 개발용 Supabase PostgreSQL을 사용합니다. 외부에 공개하는 개발 서버도
+`DJANGO_DEBUG=false`로 실행합니다. 로컬 실행 방식은 그대로 유지합니다.
 
-### 서비스
+### 설정 파일
 
-GitHub 저장소를 연결해 Python Web Service를 생성합니다.
+- `BE/Dockerfile`: Python 3.12, 의존성 설치, 정적 파일 수집, Gunicorn 실행.
+- `BE/railway.json`: Docker 빌드와 배포 전 DB 마이그레이션.
+- `FE/Dockerfile`: Node 22로 React 빌드 후 Caddy로 제공.
+- `FE/Caddyfile`: SPA 새로고침 처리와 `/api`, `/admin`, `/static`의 백엔드 전달.
+- `FE/railway.json`: Docker 빌드와 프론트 `/healthz` 상태 확인.
+- 각 `.dockerignore`: 로컬 환경변수, 의존성, DB 등을 이미지에서 제외.
 
-| 항목 | 값 |
-| --- | --- |
-| Branch | `main` |
-| Root Directory | `BE` |
-| Python version | `PYTHON_VERSION` 환경변수에 로컬과 동일한 Python 3.12 패치 버전 지정 |
-| Build Command | `pip install -r requirements.txt && python manage.py collectstatic --noinput` |
-| Start Command | `python manage.py migrate --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 1 --access-logfile - --error-logfile -` |
-| Health Check Path | `/api/health/` |
-| Auto-Deploy | `main` 커밋 시 자동 배포 |
+### 1. 서비스 생성과 저장소 연결
 
-Supabase에 DB를 저장하므로 Render Free에서도 SQLite용 영구 디스크가 필요 없습니다.
-Free 서비스의 절전 및 사용량 제한은 별도로 적용됩니다.
+Railway에서 빈 프로젝트와 빈 서비스 두 개를 먼저 만들고 아래 설정을 적용한 뒤
+같은 GitHub 저장소를 연결합니다. 환경 이름은 `development`로 지정하세요.
 
-### Render 환경변수
+| 항목 | Backend | Frontend |
+| --- | --- | --- |
+| Root Directory | `/BE` | `/FE` |
+| Config File Path | `/BE/railway.json` | `/FE/railway.json` |
+| 배포 브랜치 | `develop` | `develop` |
+| Region | Singapore | Singapore |
+| Watch Paths (선택) | `/BE/**` | `/FE/**` |
+
+Config File Path는 저장소 루트 기준입니다. Build/Start Command는 대시보드에서
+별도 지정하지 않습니다. 이전에 입력한 명령이 있다면 제거하고 파일 설정을 사용하세요.
+실제 개발 브랜치 이름이 다르면 그 브랜치를 선택합니다.
+
+### 2. Backend 환경변수와 배포
+
+Backend의 Variables에 다음을 등록합니다. `.env` 파일은 자동으로 읽지 않습니다.
 
 | 이름 | 값 |
 | --- | --- |
 | `DJANGO_DEBUG` | `false` |
-| `DJANGO_SECRET_KEY` | 별도로 생성한 운영 비밀키 |
-| `DJANGO_ALLOWED_HOSTS` | 실제 Render 호스트명 (예: `gollaeat-be.onrender.com`, 프로토콜 제외) |
-| `DATABASE_URL` | Supabase Session pooler의 실제 PostgreSQL URI (비밀번호 포함) |
-| `DJANGO_CSRF_TRUSTED_ORIGINS` | 프론트 연결 후 필요한 실제 HTTPS origin을 쉼표로 구분하여 등록 (예: `https://gollaeat.vercel.app`) |
+| `DJANGO_SECRET_KEY` | 개발 배포 전용으로 생성한 비밀키 |
+| `DATABASE_URL` | 개발용 Supabase Session pooler의 PostgreSQL URI |
+| `DJANGO_ALLOWED_HOSTS` | Backend의 공개 호스트명, 프로토콜 제외 |
+| `DJANGO_CSRF_TRUSTED_ORIGINS` | `https://`를 포함한 Frontend 공개 origin |
 
-`DJANGO_CSRF_TRUSTED_ORIGINS`는 브라우저의 POST 요청 등에서 신뢰할 origin 설정이며,
-CORS 허용이나 CSRF 토큰 전달을 대신하지 않습니다. 로그인과 프론트 연결 시 별도로 검증합니다.
-운영에서는 HTTPS 리다이렉트와 Secure 쿠키를 사용합니다. 프록시 HTTPS 판별 설정은
-Render처럼 `X-Forwarded-Proto`를 제어하는 신뢰할 수 있는 프록시 뒤에서 사용합니다.
+Backend에서 Networking → Generate Domain으로 공개 도메인을 생성합니다.
+포트를 직접 지정해야 하면 Variables에 `PORT=8000`을 추가하고 도메인의 Target Port도
+8000으로 맞춥니다. 생성한 호스트명을 `DJANGO_ALLOWED_HOSTS`에 등록합니다.
+Frontend origin은 다음 단계에서 도메인을 만든 후 등록하고 Backend를 재배포합니다.
 
-PowerShell에서 비밀키 생성 (저장소 루트에서 실행):
+비밀키 생성 (로컬 저장소 루트):
 
 ```powershell
 .\BE\.venv\Scripts\python.exe -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 ```
 
-비밀키는 Render 환경변수에만 등록하고 Git에 올리지 않습니다.
+비밀키와 DB URI는 Railway Variables에만 등록하고 Git에 올리지 않습니다.
+`DATABASE_URL`은 반드시 등록하고 `SQLITE_PATH`는 사용하지 않습니다.
+배포 전 `migrate`가 실행되므로 운영 DB를 연결하지 마세요.
+마이그레이션 실패 시 새 배포는 중단됩니다. 로컬 SQLite/CSV 데이터는 자동 이전되지 않습니다.
 
-### 테이블 생성과 배포 확인
+### 3. Frontend 환경변수와 배포
 
-시작 명령의 `migrate`가 `DATABASE_URL`이 가리키는 Supabase DB에 테이블을 생성합니다.
-배포 환경에서는 `DATABASE_URL`을 반드시 등록하고 `SQLITE_PATH`는 제거합니다.
-로컬 DB 파일을 업로드하지 않으며 기존 로컬 데이터는 이전되지 않습니다.
+Frontend Variables에 아래 값을 등록합니다 (서비스 이름이 `Backend`인 경우).
 
-새 모델을 추가할 때는 로컬에서 `makemigrations`로 생성한 마이그레이션 파일을 Git에
-포함하고, 배포 서버에서는 `migrate`로 적용합니다.
+```dotenv
+BACKEND_ORIGIN=https://${{Backend.RAILWAY_PUBLIC_DOMAIN}}
+```
 
-배포 후 `https://<Render 호스트명>/api/health/`에서 HTTP 200과
-`{"status":"ok","service":"GollaEat BE"}`를 확인하고, `/admin/`의 CSS도 확인합니다.
-현재 health API는 서버 응답만 확인하며 DB 저장/조회까지 검사하지 않습니다.
+이 값은 백엔드의 공개 HTTPS 주소이며 경로나 마지막 `/`는 붙이지 않습니다.
+직접 `https://백엔드호스트명`을 입력해도 됩니다. 프론트에는 DB URI나 비밀키를 넣지 않습니다.
 
-운영 데이터가 생기면 PostgreSQL 백업을 별도로 생성하고 보관합니다.
-코드 재배포와 DB 백업은 별개입니다.
+Frontend에서 Generate Domain으로 공개 주소를 생성합니다. 포트 감지가 안 되면
+`PORT=3000`과 Target Port 3000을 지정하세요. 그 주소를 Backend의
+`DJANGO_CSRF_TRUSTED_ORIGINS`에 등록합니다 (예: `https://frontend-example.up.railway.app`).
+두 서비스를 배포하면 브라우저는 프론트 주소만 사용하고 Caddy가 백엔드로 요청을 전달합니다.
+기존 `/api` 상대 주소를 그대로 사용하므로 별도 Vite API 환경변수나 CORS 설정은 필요 없습니다.
+CSRF 토큰 전달은 기존 API 규약대로 필요하며 CSRF 검증은 유지합니다.
 
-공식 문서: [Django 배포](https://render.com/docs/deploy-django),
-[WhiteNoise 설정](https://whitenoise.readthedocs.io/en/stable/django.html).
+### 4. 확인
+
+배포 전에 로컬에서 `cd FE; npm run build`와 Django 검사를 실행하세요.
+
+- 프론트 `/`: 화면 표시와 하위 페이지 새로고침 확인.
+- 프론트 `/healthz`: HTTP 200과 `ok` (프론트 서버만 확인).
+- 프론트 `/api/health/`: HTTP 200과 `{"status":"ok","service":"GollaEat BE"}`.
+- 프론트 `/admin/`: 관리자 화면과 CSS 확인.
+- `/api/session` 및 프로필 저장 등: 세션 쿠키, CSRF, 실제 DB 조회/저장 확인.
+
+API health는 DB 연결을 검사하지 않습니다. HTTPS 리다이렉트와 Secure 쿠키는 유지합니다.
+Backend healthcheck는 기본 설정에서 생략하며 프론트 경유 API와 실제 저장으로 확인합니다.
+프론트 healthcheck만 통과해도 백엔드/DB 정상 동작이 보장되지는 않습니다.
+
+이 설정은 개발용 기본 배포입니다. 서비스 생성, 환경변수 입력, GitHub 연결은
+Railway 대시보드에서 진행해야 합니다. 저장소 파일 변경만으로 기존 외부 서비스가
+삭제되거나 새 서비스가 생성되지는 않습니다.
+
+공식 문서: [모노레포 배포](https://docs.railway.com/deployments/monorepo),
+[파일 기반 설정](https://docs.railway.com/config-as-code/reference),
+[배포 전 명령](https://docs.railway.com/deployments/pre-deploy-command).

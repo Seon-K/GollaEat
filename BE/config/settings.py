@@ -37,7 +37,7 @@ CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.getenv(
     'DJANGO_CSRF_TRUSTED_ORIGINS', ''
 ).split(',') if origin.strip()]
 
-# Render terminates TLS and sets X-Forwarded-Proto before forwarding requests.
+# Railway terminates TLS and sets X-Forwarded-Proto before forwarding requests.
 # Only enable this behind a trusted proxy that controls this header.
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

@@ -14,8 +14,6 @@ import Inquiry from '../pages/Inquiry'
 import MyPage from '../pages/MyPage'
 import StaffCard from '../pages/StaffCard'
 import AiChat from '../pages/AiChat'
-import AiResults from '../pages/AiResults'
-import AiFollowUp from '../pages/AiFollowUp'
 import NotFound from '../pages/NotFound'
 import {
   homeLoader, requireDietProfile, profileSetupLoader, ingredientsLoader, confirmProfileLoader,
@@ -39,8 +37,6 @@ export const routes = [
   { path: '/my-page', loader: requireDietProfile, Component: MyPage, handle: { title: '마이페이지' } },
   { path: '/staff-card', loader: requireDietProfile, Component: StaffCard, handle: { title: '직원에게 보여주기' } },
   { path: '/ai-chat', loader: requireDietProfile, Component: AiChat, handle: { title: 'AI 메뉴 추천' } },
-  { path: '/ai-results', loader: requireDietProfile, Component: AiResults, handle: { title: 'AI 추천 결과' } },
-  { path: '/ai-follow-up', loader: requireDietProfile, Component: AiFollowUp, handle: { title: 'AI 후속 질문' } },
   { path: '*', Component: NotFound, handle: { title: '페이지 없음' } },
 ]
 
