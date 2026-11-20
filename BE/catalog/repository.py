@@ -152,7 +152,31 @@ class CsvCatalogRepository:
             RESTAURANT_REQUIRED_COLUMNS,
             'restaurant',
         )
-        return [self._restaurant(row) for row in rows]
+        points = self.coordinates()
+        result = [self._restaurant(row) for row in rows]
+        for item in result:
+            point = points.get(item['restaurant_id'])
+            item['latitude'] = point[0] if point else None
+            item['longitude'] = point[1] if point else None
+        return result
+
+    def list_menus(self):
+        rows = _load_csv(self.menu_csv_path, MENU_REQUIRED_COLUMNS, 'menu')
+        restaurants = self.list_restaurants() if self.restaurant_csv_path else []
+        result = []
+        for row in rows:
+            matches = [r for r in restaurants if normalize_brand(r['brand']) == normalize_brand(row['brand'])]
+            raw = row.get('price_raw') or row.get('price') or ''
+            numeric = re.fullmatch(r'\s*([0-9]+|[0-9]{1,3}(?:,[0-9]{3})+)\s*원?\s*', raw)
+            amount = int(numeric.group(1).replace(',', '')) if numeric else None
+            result.append({'menu_id': row['menu_id'], 'menu_name': row['menu_name_raw'],
+                'brand': row['brand'], 'category': row['category'],
+                'restaurant_id': None, 'restaurant_name': None,
+                'restaurant_search_names': [r['restaurant_name'] for r in matches],
+                'price_raw': raw or None, 'price_amount': amount,
+                'price_status': 'fixed' if amount is not None else 'unknown',
+                'branch_sale_status': 'unverified'})
+        return result
 
     def get_menu(self, menu_id):
         rows = _load_csv(self.menu_csv_path, MENU_REQUIRED_COLUMNS, 'menu')

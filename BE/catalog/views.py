@@ -32,7 +32,9 @@ def menus(request):
         return _method_not_allowed()
 
     try:
-        return JsonResponse(list_menus(request.GET))
+        return JsonResponse(list_menus(request.GET, _csv_repository()))
+    except CatalogDataError as exc:
+        return _catalog_unavailable(exc)
     except MenuQueryError as exc:
         return JsonResponse(
             {

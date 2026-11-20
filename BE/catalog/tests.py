@@ -1,12 +1,18 @@
 import csv
 import os
 import tempfile
+from unittest.mock import patch
+from .repository import MockMenuRepository
 
 from django.test import SimpleTestCase
 from django.test.utils import override_settings
 
 
 class MenuListApiTests(SimpleTestCase):
+    def setUp(self):
+        mocked = patch('catalog.views._csv_repository', return_value=MockMenuRepository())
+        mocked.start()
+        self.addCleanup(mocked.stop)
     def test_lists_menus_with_default_pagination(self):
         response = self.client.get('/api/menus')
 

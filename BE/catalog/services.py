@@ -65,8 +65,10 @@ def _serialize(menu):
             'raw': menu['price_raw'],
             'amount': menu['price_amount'],
             'currency': 'KRW',
-            'status': 'fixed',
+            'status': menu.get('price_status', 'fixed'),
         },
+        'brand': menu.get('brand'),
+        'branch_sale_status': menu.get('branch_sale_status', 'unverified'),
     }
 
 
@@ -96,21 +98,24 @@ def list_menus(params, repository=None):
         menus = [
             menu for menu in menus
             if normalized_query in menu['menu_name'].casefold()
-            or normalized_query in menu['restaurant_name'].casefold()
+            or normalized_query in (menu['restaurant_name'] or '').casefold()
+            or normalized_query in menu.get('brand', '').casefold()
+            or any(normalized_query in name.casefold() for name in menu.get('restaurant_search_names', []))
         ]
     if normalized_category:
         menus = [menu for menu in menus if menu['category'].casefold() == normalized_category]
 
     menus = [
         menu for menu in menus
-        if menu['price_amount'] >= min_price
-        and (max_price is None or menu['price_amount'] <= max_price)
+        if (menu['price_amount'] is None and 'min_price' not in params and 'max_price' not in params)
+        or (menu['price_amount'] is not None and menu['price_amount'] >= min_price
+            and (max_price is None or menu['price_amount'] <= max_price))
     ]
 
     if sort == 'price_asc':
-        menus.sort(key=lambda menu: (menu['price_amount'], menu['menu_id']))
+        menus.sort(key=lambda menu: (menu['price_amount'] is None, menu['price_amount'] or 0, menu['menu_id']))
     elif sort == 'price_desc':
-        menus.sort(key=lambda menu: (-menu['price_amount'], menu['menu_id']))
+        menus.sort(key=lambda menu: (menu['price_amount'] is None, -(menu['price_amount'] or 0), menu['menu_id']))
     else:
         menus.sort(key=lambda menu: (menu['menu_name'].casefold(), menu['menu_id']))
 
