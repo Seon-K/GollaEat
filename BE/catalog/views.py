@@ -7,8 +7,8 @@ from .services import list_restaurant_menus
 
 
 def _csv_repository():
-    return CsvCatalogRepository(settings.CATALOG_MENU_CSV, settings.CATALOG_RESTAURANT_CSV,
-                                settings.CATALOG_COORDINATE_CSVS)
+    from .final_repository import get_repository
+    return get_repository()
 
 
 def _method_not_allowed():
