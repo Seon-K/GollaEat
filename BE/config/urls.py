@@ -20,11 +20,8 @@ from .views import health
 from AI.chatbot.views import chat_view
 
 urlpatterns = [
-<<<<<<< HEAD
     path('api/chat', chat_view),
-=======
     path('api/', include('catalog.urls')),
->>>>>>> origin/develop
     path('api/', include('dietary.urls')),
     path('api/health/', health, name='health'),
     path('admin/', admin.site.urls),
