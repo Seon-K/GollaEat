@@ -1,4 +1,4 @@
-"""Isolated local/CI PostgreSQL settings; never use DATABASE_URL."""
+"""운영 DB와 분리된 로컬·CI PostgreSQL 테스트 설정"""
 import os
 
 from .settings import *  # noqa: F403

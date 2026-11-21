@@ -1,4 +1,4 @@
-"""Presentation labels; internal unknown-item codes remain stable."""
+"""미확인 코드 유지 및 한국어 표시 문구"""
 TAG_NAMES = {
     'egg': '난류', 'milk': '우유', 'buckwheat': '메밀', 'nuts': '견과류',
     'soy': '대두', 'wheat': '밀', 'mackerel': '고등어', 'crab': '게',

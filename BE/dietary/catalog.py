@@ -1,4 +1,4 @@
-"""Backend A boundary. No duplicate menu/ingredient/source persistence in B."""
+"""A 메뉴 데이터 조회 어댑터 경계"""
 from django.conf import settings
 from django.utils.module_loading import import_string
 

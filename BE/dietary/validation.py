@@ -1,4 +1,4 @@
-"""Shared validation for HTTP and direct service callers."""
+"""HTTP·서비스 공통 입력 검증"""
 
 
 def identifiers(value):

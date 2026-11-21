@@ -8,6 +8,7 @@ from .services import check_order, communication, evaluate, rank_menus
 
 
 class ReviewOwnershipTests(TestCase):
+    # 세션 소유권 기반 본인 표시·내 리뷰 필터 검증
     def setUp(self):
         self.client.get('/api/session')
         self.profile = Profile.objects.get(guest_id=self.client.session['dietary_owner'])
@@ -52,6 +53,7 @@ class ReviewOwnershipTests(TestCase):
 
 
 class EvaluationQueryTests(TestCase):
+    # 판정 결과 유지 및 기준 조회 횟수 검증
     def setUp(self):
         self.profile = Profile.objects.create(guest_id=uuid.uuid4())
         self.profile.criteria.set(Criterion.objects.filter(code__in=['allergen-milk', 'exclude-pork', 'prefer-korean']))

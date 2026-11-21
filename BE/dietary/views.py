@@ -15,6 +15,7 @@ from .pagination import page_parameters, paginate
 
 
 def endpoint(methods):
+    # 허용 메서드·JSON 입력 오류 공통 처리
     def decorate(fn):
         @wraps(fn)
         def wrapped(request, *args, **kwargs):
@@ -34,6 +35,7 @@ def endpoint(methods):
 
 
 def owner(request):
+    # 서버 세션 기반 소유자 식별
     if 'dietary_owner' not in request.session:
         request.session['dietary_owner'] = str(uuid.uuid4())
     return Profile.objects.get_or_create(guest_id=request.session['dietary_owner'])[0]
@@ -116,6 +118,7 @@ def favorites(request):
         return JsonResponse({'id': item.pk, 'menu_id': mid}, status=201 if created else 200)
     page, limit = page_parameters(request.GET)
     selected, pagination = paginate(Favorite.objects.filter(profile=p).order_by('-created_at', '-pk'), page, limit)
+    # 현재 페이지 즐겨찾기의 최신 기준 재판정
     context = EvaluationContext(p) if selected else None
     return JsonResponse({'favorites': [{'id': f.pk, 'menu_id': f.menu_id, 'judgement': evaluate(p, f.menu_id, context=context)} for f in selected],
                          'pagination': pagination})
@@ -128,6 +131,7 @@ def favorite_detail(request, pk):
 
 
 def review_json(r, guest_id=None):
+    # 작성자 식별자 비공개, 현재 세션 본인 여부만 반환
     return {'id': r.pk, 'menu_id': r.menu_id, 'body': r.body, 'is_mine': bool(guest_id and str(r.profile.guest_id) == guest_id), 'disclosed_conditions': r.disclosed_conditions,
             'created_at': r.created_at.isoformat(), 'updated_at': r.updated_at.isoformat()}
 
@@ -150,6 +154,7 @@ def reviews(request):
         r = Review.objects.create(profile=p, menu_id=ids([request.payload['menu_id']])[0], body=review_body(request.payload),
                                   disclosed_conditions=[{'code': c.code, 'name': c.name, 'kind': c.kind} for c in selected])
         return JsonResponse(review_json(r, request.session.get('dietary_owner')), status=201)
+    # 신규 세션 생성 없는 공개 조회 및 현재 세션 기반 내 리뷰 필터
     mine = request.GET.get('mine', 'false')
     if mine not in ['true', 'false']:
         raise ValueError('mine must be true or false')
@@ -165,7 +170,7 @@ def reviews(request):
         if connection.vendor == 'postgresql':
             qs = qs.filter(disclosed_conditions__contains=[{'code': code}])
         else:
-            # Parameterized EXISTS keeps SQLite JSON snapshot filtering in the DB.
+            # SQLite 공개 조건 DB 필터 및 매개변수 바인딩
             alias = f'condition_match_{index}'
             expression = RawSQL(
                 "EXISTS (SELECT 1 FROM json_each(dietary_review.disclosed_conditions) AS snapshot "
@@ -179,6 +184,7 @@ def reviews(request):
 @endpoint(['GET', 'PATCH', 'DELETE'])
 def review_detail(request, pk):
     qs = Review.objects.select_related('profile').filter(pk=pk)
+    # 표시값과 독립적인 서버 수정·삭제 권한 검사
     if request.method != 'GET':
         qs = qs.filter(profile=owner(request))
     r = qs.first()
