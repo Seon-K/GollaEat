@@ -28,8 +28,10 @@ def get_repository():
 
 
 class FinalCatalogRepository:
-    def __init__(self):
-        self.rows = _load_csv(settings.CATALOG_FINAL_CSV, {
+    def __init__(self, csv_path=None, validation_path=None):
+        csv_path = settings.CATALOG_FINAL_CSV if csv_path is None else csv_path
+        validation_path = settings.CATALOG_COORDINATE_VALIDATION_CSV if validation_path is None else validation_path
+        self.rows = _load_csv(csv_path, {
             'preprocess_row_id', 'place_id', '식당 이름', '식당 위치', '메뉴 이름',
             '메뉴 가격', 'price_numeric', 'price_status', 'menu_option', 'description',
             'restaurant_type', 'latitude_clean', 'longitude_clean',
@@ -38,8 +40,8 @@ class FinalCatalogRepository:
         if len(set(ids)) != len(ids) or any(not value for value in ids):
             raise CatalogDataError('Final CSV requires unique nonempty preprocess_row_id')
         self.validation = {}
-        if settings.CATALOG_COORDINATE_VALIDATION_CSV:
-            for row in _load_csv(settings.CATALOG_COORDINATE_VALIDATION_CSV,
+        if validation_path:
+            for row in _load_csv(validation_path,
                     {'place_id', '2차검증_최종상태', '외부_주소좌표_검증'}, 'coordinate validation'):
                 key = place_id(row['place_id'])
                 if key in self.validation and self.validation[key] != row:

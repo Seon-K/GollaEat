@@ -39,9 +39,8 @@ DB 메뉴는 present/absent 태그를 추정하지 않는다.
 판매 여부는 `unverified`를 유지한다. 기존 상세·매장별 메뉴의 평면 필드와
 알레르겐·출처·검증 정보는 삭제하지 않는다. 상세와 목록의 추가 필드는 서로 다를 수 있다.
 
-백엔드 A의 Mock 기반 메뉴 목록·검색 API다. Django 모델과 DB 테이블은 만들지 않는다.
-`repository.MockMenuRepository`를 향후 DB 기반 저장소로 교체할 수 있도록 조회·검증 로직을
-`services.py`에 분리했다. 백엔드 B의 `dietary` 앱은 수정하지 않는다.
+실서비스 기본 조회는 `DatabaseCatalogRepository`의 Django ORM을 사용한다.
+`MockMenuRepository`는 과거 계약 회귀 테스트에서만 사용한다. 백엔드 B의 `dietary` 앱은 수정하지 않는다.
 
 ## Endpoint
 
@@ -107,13 +106,12 @@ DB 메뉴는 present/absent 태그를 추정하지 않는다.
 }
 ```
 
-## Deferred work
+## 외부 데이터가 필요한 항목
 
-- 실제 `Restaurant`, `Menu` 모델과 마이그레이션
-- 실제 CSV/Supabase PostgreSQL 데이터 적재 및 조회
-- 비정형·범위형 가격 필터 정책
-- 거리·영업 상태·식이 판정·즐겨찾기 결합
-- 백엔드 B `DietaryCatalog` 어댑터 구현
+- 공신력 있는 영업시간·임시휴무·포장/배달·예약 URL 및 음식 분류 데이터
+- 매장 확인을 거친 옵션·구성품과 재료/알레르겐 출처
+- 주소 좌표 변환 공급자/키, 좌표 정확성 검증 결과
+- 비정형·범위형 가격은 원문 보존, 숫자 가격이 없으면 `unknown`으로 처리
 
 ## Restaurant CSV APIs
 
