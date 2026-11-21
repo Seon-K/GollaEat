@@ -1,5 +1,35 @@
 # 백엔드 B API / A 연동 계약
 
+## 목록 조회 및 안내 문구 보완
+
+`GET /api/favorites?page=1&limit=20`, `GET /api/reviews?page=1&limit=20`으로 나눠 조회한다.
+page 기본값은 1, limit 기본값은 20이며 최대 100이다. 잘못된 값은 400, 범위 밖 페이지는 빈 배열을 반환한다.
+기존 `favorites`, `reviews` 배열 키는 유지하며 다음 메타데이터가 추가된다.
+
+```json
+{"pagination":{"page":1,"limit":20,"count":20,"total":42,"total_pages":3,"next_page":2,"previous_page":null}}
+```
+
+즐겨찾기는 본인 데이터만 최신 등록순으로 조회하며 해당 페이지의 메뉴만 재판정한다.
+리뷰는 최신 등록순이고 메뉴·공개 조건 AND 필터를 **페이지 분할 전에 DB에서 적용**한다.
+SQLite는 parameterized json_each EXISTS, PostgreSQL은 JSON containment를 사용한다.
+필터는 현재 프로필이 아니라 작성 당시 공개 스냅샷을 기준으로 한다.
+
+판정 응답에는 기존 `unknown_items` 코드 외에 표시용 `unknown_messages` 문자열 배열이 추가된다.
+예: `"allergen-milk:milk"` → `"우유 포함 여부 확인 필요"`.
+직원 안내 응답의 `text`도 이 한국어 문구를 사용한다. 코드 필드는 기존 연동을 위해 유지한다.
+등록되지 않은 성분 태그는 내부 코드를 노출하지 않고 해당 조건의 일반적인 확인 문구로 안내한다.
+
+HTTP뿐 아니라 공통 서비스 직접 호출에서도 ID·임시 조건·옵션·주문 구성을 검증한다.
+어댑터 성분 태그는 문자열 배열, sources는 출처 객체 배열이어야 한다.
+빈 출처 객체나 잘못된 데이터 형식은 `invalid_component_data`로 표시하여 match를 막는다.
+확인된 포함 성분이 있으면 이런 경우에도 mismatch가 우선한다.
+출처 검증은 형식 검사이며 실제 내용의 신뢰성·유효 기간 검증은 A 연동 계약을 따른다.
+기존 ID만 있는 테스트 출처도 허용하며, 실제 출처 정보를 새로 생성하거나 추정하지 않는다.
+
+목록 기본 응답은 이제 최대 20개이므로 FE는 pagination을 사용해 다음 페이지를 요청해야 한다.
+DB 모델 변경이나 새 마이그레이션은 없다. PostgreSQL 분기 실행 검증과 외부 CSV 통합 테스트는 해당 환경이 필요하다.
+
 기존 Django 5.2 + SQLite + 함수형 JsonResponse 방식을 사용한다. AI 호출 및 사용자 로그인 기능 없음.
 매장·메뉴·재료·옵션·출처 모델은 만들지 않는다. 즐겨찾기와 리뷰에는 A의 불투명한 ID만 보관한다.
 
