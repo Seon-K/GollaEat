@@ -8,6 +8,7 @@ from django.middleware.csrf import get_token
 
 from .models import Criterion, Favorite, Profile, Review
 from .services import check_order, communication, evaluate, rank_menus
+from .validation import identifiers as ids, order_components
 
 
 def endpoint(methods):
@@ -35,25 +36,8 @@ def owner(request):
     return Profile.objects.get_or_create(guest_id=request.session['dietary_owner'])[0]
 
 
-def ids(value):
-    if not isinstance(value, list) or len(value) > 100 or any(not isinstance(x, str) or not x or len(x) > 100 for x in value):
-        raise ValueError('Expected up to 100 nonempty string IDs (max 100 characters)')
-    return value
-
-
 def components(payload):
-    values = payload['components']
-    if not isinstance(values, list) or not 1 <= len(values) <= 100:
-        raise ValueError('components must contain 1–100 items')
-    for c in values:
-        if not isinstance(c, dict):
-            raise ValueError('Each component must be an object')
-        ids([c['id']])
-        if c['role'] not in ['menu', 'sauce', 'topping', 'side', 'drink']:
-            raise ValueError('Invalid component role')
-        if 'modifications' in c:
-            ids(c['modifications'])
-    return values
+    return order_components(payload['components'])
 
 
 @endpoint(['GET'])

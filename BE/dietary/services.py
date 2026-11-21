@@ -1,7 +1,39 @@
 from .catalog import get_catalog
 from .models import Criterion, SupportRule
+from .validation import identifiers, order_components
 
 PRIORITY = {'match': 0, 'needs_check': 1, 'mismatch': 2}
+
+
+def validate_component(data):
+    """Malformed adapter evidence must never produce a match."""
+    if data is None:
+        return None, False
+    if not isinstance(data, dict):
+        return None, True
+    clean = {}
+    invalid = False
+    for field in ['present_tags', 'absent_tags', 'preference_tags']:
+        value = data.get(field, [])
+        if not isinstance(value, list) or any(not isinstance(x, str) or not x.strip() for x in value):
+            clean[field] = []
+            invalid = True
+        else:
+            clean[field] = value
+    sources = data.get('sources', [])
+    if not isinstance(sources, list):
+        sources = []
+        invalid = True
+    clean['sources'] = []
+    for source in sources:
+        if not isinstance(source, dict) or not any(
+            isinstance(source.get(key), str) and source[key].strip()
+            for key in ['id', 'url', 'source_url', 'evidence_locator']
+        ):
+            invalid = True
+        else:
+            clean['sources'].append(source)
+    return clean, invalid
 
 
 def aggregate(results):
@@ -12,8 +44,7 @@ def resolve_criteria(profile, codes):
     """None uses the saved profile; a list supplies temporary criterion codes."""
     if codes is None:
         return list(profile.criteria.all())
-    if not isinstance(codes, list) or any(not isinstance(code, str) or not code for code in codes):
-        raise ValueError('criteria must be a list of criterion codes')
+    identifiers(codes)
     selected = list(Criterion.objects.filter(code__in=codes, active=True))
     if len(selected) != len(set(codes)):
         raise ValueError('Unknown or inactive criterion')
@@ -26,11 +57,15 @@ def resolve_criteria(profile, codes):
 
 
 def evaluate(profile, component_id, modifications=None, *, criteria=None):
+    identifiers([component_id])
+    if modifications is not None:
+        identifiers(modifications)
+    criteria = resolve_criteria(profile, criteria)
     data = get_catalog().get_component(component_id)
+    data, invalid_data = validate_component(data)
     reasons = []
     unknown = []
     problems = set()
-    criteria = resolve_criteria(profile, criteria)
     for criterion in criteria:
         if criterion.kind == 'preference':
             continue
@@ -44,7 +79,7 @@ def evaluate(profile, component_id, modifications=None, *, criteria=None):
         if hits:
             status = 'mismatch'
             problems.update(hits)
-        elif not rule or not tags or missing or not sources:
+        elif invalid_data or not rule or not tags or missing or not sources:
             status = 'needs_check'
         else:
             status = 'match'
@@ -59,6 +94,8 @@ def evaluate(profile, component_id, modifications=None, *, criteria=None):
                         'rule_source': rule.source if rule else None, 'sources': sources})
     if not data:
         unknown.append('component_data')
+    if invalid_data:
+        unknown.append('invalid_component_data')
     if modifications:
         # Client requests are not evidence that ingredients have been removed.
         unknown.append('unverified_modifications')
@@ -74,11 +111,13 @@ def evaluate(profile, component_id, modifications=None, *, criteria=None):
 
 
 def rank_menus(profile, menu_ids, *, criteria=None):
+    identifiers(menu_ids)
     resolve_criteria(profile, criteria)
     return sorted((evaluate(profile, mid, criteria=criteria) for mid in menu_ids), key=lambda r: r['sort_key'])
 
 
 def check_order(profile, components):
+    order_components(components)
     results = [dict(evaluate(profile, c['id'], c.get('modifications')), role=c['role']) for c in components]
     return {'status': aggregate(results), 'components': results}
 
