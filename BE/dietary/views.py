@@ -126,8 +126,8 @@ def favorite_detail(request, pk):
     return JsonResponse({'deleted': bool(count)}, status=200 if count else 404)
 
 
-def review_json(r):
-    return {'id': r.pk, 'menu_id': r.menu_id, 'body': r.body, 'disclosed_conditions': r.disclosed_conditions,
+def review_json(r, guest_id=None):
+    return {'id': r.pk, 'menu_id': r.menu_id, 'body': r.body, 'is_mine': bool(guest_id and str(r.profile.guest_id) == guest_id), 'disclosed_conditions': r.disclosed_conditions,
             'created_at': r.created_at.isoformat(), 'updated_at': r.updated_at.isoformat()}
 
 
@@ -148,8 +148,14 @@ def reviews(request):
             raise ValueError('Disclosure must be a subset of your current restrictions')
         r = Review.objects.create(profile=p, menu_id=ids([request.payload['menu_id']])[0], body=review_body(request.payload),
                                   disclosed_conditions=[{'code': c.code, 'name': c.name, 'kind': c.kind} for c in selected])
-        return JsonResponse(review_json(r), status=201)
-    qs = Review.objects.order_by('-created_at', '-pk')
+        return JsonResponse(review_json(r, request.session.get('dietary_owner')), status=201)
+    mine = request.GET.get('mine', 'false')
+    if mine not in ['true', 'false']:
+        raise ValueError('mine must be true or false')
+    qs = Review.objects.select_related('profile').order_by('-created_at', '-pk')
+    guest_id = request.session.get('dietary_owner')
+    if mine == 'true':
+        qs = qs.filter(profile__guest_id=guest_id) if guest_id else qs.none()
     if request.GET.get('menu_id'):
         qs = qs.filter(menu_id=request.GET['menu_id'])
     conditions = ids(request.GET.getlist('condition'))
@@ -166,12 +172,12 @@ def reviews(request):
                 [code], output_field=BooleanField())
             qs = qs.alias(**{alias: expression}).filter(**{alias: True})
     selected, pagination = paginate(qs, page, limit)
-    return JsonResponse({'reviews': [review_json(r) for r in selected], 'pagination': pagination})
+    return JsonResponse({'reviews': [review_json(r, guest_id) for r in selected], 'pagination': pagination})
 
 
 @endpoint(['GET', 'PATCH', 'DELETE'])
 def review_detail(request, pk):
-    qs = Review.objects.filter(pk=pk)
+    qs = Review.objects.select_related('profile').filter(pk=pk)
     if request.method != 'GET':
         qs = qs.filter(profile=owner(request))
     r = qs.first()
@@ -183,4 +189,4 @@ def review_detail(request, pk):
     if request.method == 'PATCH':
         r.body = review_body(request.payload)
         r.save(update_fields=['body', 'updated_at'])
-    return JsonResponse(review_json(r))
+    return JsonResponse(review_json(r, request.session.get('dietary_owner')))
