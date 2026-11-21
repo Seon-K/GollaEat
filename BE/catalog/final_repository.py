@@ -18,6 +18,9 @@ def place_id(value):
 
 
 def get_repository():
+    if settings.CATALOG_USE_DB:
+        from .db_repository import DatabaseCatalogRepository
+        return DatabaseCatalogRepository()
     if settings.CATALOG_FINAL_CSV:
         return FinalCatalogRepository()
     return CsvCatalogRepository(settings.CATALOG_MENU_CSV, settings.CATALOG_RESTAURANT_CSV,

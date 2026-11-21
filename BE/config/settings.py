@@ -170,6 +170,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Read-only catalog CSV sources. Keep machine-specific paths out of source control.
 CATALOG_MENU_CSV = os.getenv('CATALOG_MENU_CSV', '')
 CATALOG_FINAL_CSV = os.getenv('CATALOG_FINAL_CSV', '')
+CATALOG_USE_DB = os.getenv('CATALOG_USE_DB', 'true').lower() == 'true'
 CATALOG_COORDINATE_VALIDATION_CSV = os.getenv('CATALOG_COORDINATE_VALIDATION_CSV', '')
 CATALOG_RESTAURANT_CSV = os.getenv('CATALOG_RESTAURANT_CSV', '')
 DIETARY_CATALOG_ADAPTER = 'catalog.adapters.DietaryCatalog'
