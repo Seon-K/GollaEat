@@ -9,7 +9,7 @@ from django.http import JsonResponse
 from django.middleware.csrf import get_token
 
 from .models import Criterion, Favorite, Profile, Review
-from .services import check_order, communication, evaluate, rank_menus
+from .services import EvaluationContext, check_order, communication, evaluate, rank_menus
 from .validation import identifiers as ids, order_components
 from .pagination import page_parameters, paginate
 
@@ -116,7 +116,8 @@ def favorites(request):
         return JsonResponse({'id': item.pk, 'menu_id': mid}, status=201 if created else 200)
     page, limit = page_parameters(request.GET)
     selected, pagination = paginate(Favorite.objects.filter(profile=p).order_by('-created_at', '-pk'), page, limit)
-    return JsonResponse({'favorites': [{'id': f.pk, 'menu_id': f.menu_id, 'judgement': evaluate(p, f.menu_id)} for f in selected],
+    context = EvaluationContext(p) if selected else None
+    return JsonResponse({'favorites': [{'id': f.pk, 'menu_id': f.menu_id, 'judgement': evaluate(p, f.menu_id, context=context)} for f in selected],
                          'pagination': pagination})
 
 
