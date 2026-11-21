@@ -4,6 +4,19 @@ from django.http import JsonResponse
 from .repository import CatalogDataError, CsvCatalogRepository
 from .services import MenuQueryError, get_restaurant_detail, list_menus, list_restaurants
 from .services import list_restaurant_menus
+from .services import serialize_menu_detail
+
+
+def _personalized(request, result):
+    from dietary.views import owner
+    from dietary.models import Favorite
+    from dietary.services import evaluate
+    profile = owner(request)
+    saved = set(Favorite.objects.filter(profile=profile).values_list('menu_id', flat=True))
+    for menu in result['results']:
+        menu['saved'] = menu['menu_id'] in saved
+        menu['judgement'] = evaluate(profile, menu['menu_id'])
+    return result
 
 
 def _csv_repository():
@@ -32,7 +45,13 @@ def menus(request):
         return _method_not_allowed()
 
     try:
-        return JsonResponse(list_menus(request.GET, _csv_repository()))
+        params = request.GET.copy()
+        personalize = params.get('personalize', 'false')
+        if personalize not in {'true', 'false'}:
+            raise MenuQueryError('personalize', 'personalize must be true or false')
+        params.pop('personalize', None)
+        result = list_menus(params, _csv_repository())
+        return JsonResponse(_personalized(request, result) if personalize == 'true' else result)
     except CatalogDataError as exc:
         return _catalog_unavailable(exc)
     except MenuQueryError as exc:
@@ -52,7 +71,7 @@ def menu_detail(request, menu_id):
     if request.method != 'GET':
         return _method_not_allowed()
     try:
-        result = _csv_repository().get_menu(menu_id)
+        result = serialize_menu_detail(_csv_repository().get_menu(menu_id))
     except CatalogDataError as exc:
         return _catalog_unavailable(exc)
     if result is None:

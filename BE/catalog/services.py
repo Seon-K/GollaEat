@@ -3,9 +3,31 @@ import math
 from .repository import MockMenuRepository, normalize_brand
 
 
-ALLOWED_PARAMETERS = {'q', 'min_price', 'max_price', 'category', 'sort', 'page', 'limit'}
-SORT_OPTIONS = {'menu_name_asc', 'price_asc', 'price_desc'}
-RESTAURANT_PARAMETERS = {'q', 'brand', 'page', 'limit', 'lat', 'lng', 'radius_km', 'sort', 'restaurant_type'}
+ALLOWED_PARAMETERS = {'q', 'min_price', 'max_price', 'category', 'sort', 'page', 'limit',
+    'lat', 'lng', 'radius_km', 'region', 'open_now'}
+SORT_OPTIONS = {'menu_name_asc', 'price_asc', 'price_desc', 'distance_asc'}
+RESTAURANT_PARAMETERS = {'q', 'brand', 'page', 'limit', 'lat', 'lng', 'radius_km', 'sort',
+    'restaurant_type', 'category', 'region', 'open_now', 'min_price', 'max_price'}
+
+
+def _boolean_parameter(params, name):
+    if name not in params:
+        return None
+    if params[name] not in {'true', 'false'}:
+        raise MenuQueryError(name, f'{name} must be true or false')
+    return params[name] == 'true'
+
+
+def _location_parameters(params):
+    has_location = 'lat' in params or 'lng' in params
+    if not has_location and ('radius_km' in params or params.get('sort') == 'distance_asc'):
+        raise MenuQueryError('lat', 'lat and lng are required for location search')
+    lat = _coordinate_parameter(params, 'lat', -90, 90) if has_location else None
+    lng = _coordinate_parameter(params, 'lng', -180, 180) if has_location else None
+    radius = _coordinate_parameter(params, 'radius_km', 0, float('inf')) if 'radius_km' in params else None
+    if radius is not None and radius <= 0:
+        raise MenuQueryError('radius_km', 'radius_km must be positive')
+    return lat, lng, radius
 
 
 def _coordinate_parameter(params, name, minimum, maximum):
@@ -61,7 +83,9 @@ def _serialize(menu):
         'restaurant': {
             'restaurant_id': menu['restaurant_id'],
             'restaurant_name': menu['restaurant_name'],
+            'latitude': menu.get('latitude'), 'longitude': menu.get('longitude'),
         },
+        'distance_km': menu.get('distance_km'),
         'category': menu['category'],
         'price': {
             'raw': menu['price_raw'],
@@ -72,6 +96,25 @@ def _serialize(menu):
         'brand': menu.get('brand'),
         'branch_sale_status': menu.get('branch_sale_status', 'unverified'),
     }
+
+
+def serialize_menu_detail(menu):
+    """Add common objects without removing legacy fields or evidence."""
+    if menu is None:
+        return None
+    result = dict(menu)
+    result['restaurant'] = menu.get('restaurant', {
+        'restaurant_id': menu.get('restaurant_id'),
+        'restaurant_name': menu.get('restaurant_name'),
+        'latitude': menu.get('latitude'), 'longitude': menu.get('longitude'),
+    })
+    result['price'] = menu.get('price', {
+        'raw': menu.get('price_raw'), 'amount': menu.get('price_amount'),
+        'currency': 'KRW', 'status': menu.get('price_status', 'unknown'),
+    })
+    result.setdefault('branch_sale_status', 'unverified')
+    result.setdefault('distance_km', None)
+    return result
 
 
 def list_menus(params, repository=None):
@@ -91,8 +134,28 @@ def list_menus(params, repository=None):
         raise MenuQueryError('sort', f'sort must be one of: {", ".join(sorted(SORT_OPTIONS))}')
     if max_price is not None and min_price > max_price:
         raise MenuQueryError('min_price', 'min_price must be less than or equal to max_price')
+    lat, lng, radius = _location_parameters(params)
+    region = _text_parameter(params, 'region', 100).casefold()
+    open_now = _boolean_parameter(params, 'open_now')
 
     menus = (repository or MockMenuRepository()).list_menus()
+    if region or open_now is not None or lat is not None:
+        restaurants = {r['restaurant_id']: r for r in repository.list_restaurants()}
+        selected = []
+        for raw in menus:
+            menu = dict(raw)
+            restaurant = restaurants.get(menu['restaurant_id'], {})
+            if region and region not in restaurant.get('address', '').casefold():
+                continue
+            status = restaurant.get('operating_status', 'unknown')
+            if open_now is not None and status not in ({'open'} if open_now else {'closed', 'break'}):
+                continue
+            a, b = restaurant.get('latitude'), restaurant.get('longitude')
+            menu['distance_km'] = haversine_km(lat, lng, a, b) if lat is not None and a is not None and b is not None else None
+            if radius is not None and (menu['distance_km'] is None or menu['distance_km'] > radius):
+                continue
+            selected.append(menu)
+        menus = selected
     normalized_query = query.casefold()
     normalized_category = category.casefold()
 
@@ -118,6 +181,8 @@ def list_menus(params, repository=None):
         menus.sort(key=lambda menu: (menu['price_amount'] is None, menu['price_amount'] or 0, menu['menu_id']))
     elif sort == 'price_desc':
         menus.sort(key=lambda menu: (menu['price_amount'] is None, -(menu['price_amount'] or 0), menu['menu_id']))
+    elif sort == 'distance_asc':
+        menus.sort(key=lambda menu: (menu.get('distance_km') is None, menu.get('distance_km') or 0, menu['menu_id']))
     else:
         menus.sort(key=lambda menu: (menu['menu_name'].casefold(), menu['menu_id']))
 
@@ -152,7 +217,7 @@ def list_restaurants(params, repository):
 
     has_location = 'lat' in params or 'lng' in params
     sort = params.get('sort', 'restaurant_name_asc')
-    if sort not in {'restaurant_name_asc', 'distance_asc'}:
+    if sort not in {'restaurant_name_asc', 'distance_asc', 'price_asc', 'price_desc'}:
         raise MenuQueryError('sort', 'unsupported sort')
     if not has_location and ('radius_km' in params or sort == 'distance_asc'):
         raise MenuQueryError('lat', 'lat and lng are required for location search')
@@ -166,6 +231,30 @@ def list_restaurants(params, repository):
             raise MenuQueryError('radius_km', 'radius_km must be positive')
 
     restaurants = repository.list_restaurants()
+    region = _text_parameter(params, 'region', 100).casefold()
+    category = _text_parameter(params, 'category', 100).casefold()
+    open_now = _boolean_parameter(params, 'open_now')
+    if region:
+        restaurants = [r for r in restaurants if region in r['address'].casefold()]
+    if category:
+        restaurants = [r for r in restaurants if r.get('category', '').casefold() == category]
+    if open_now is not None:
+        restaurants = [r for r in restaurants if r.get('operating_status') in ({'open'} if open_now else {'closed', 'break'})]
+    if 'min_price' in params or 'max_price' in params or sort in {'price_asc', 'price_desc'}:
+        minimum = _integer_parameter(params, 'min_price', 0, 0)
+        maximum = _integer_parameter(params, 'max_price', None, 0)
+        if maximum is not None and minimum > maximum:
+            raise MenuQueryError('min_price', 'min_price must not exceed max_price')
+        prices = {}
+        eligible = set()
+        for m in repository.list_menus():
+            price = m.get('price_amount')
+            if price is not None:
+                prices[m['restaurant_id']] = min(prices.get(m['restaurant_id'], price), price)
+                if price >= minimum and (maximum is None or price <= maximum):
+                    eligible.add(m['restaurant_id'])
+        restaurants = [dict(r, min_menu_price=prices.get(r['restaurant_id'])) for r in restaurants
+                       if ('min_price' not in params and 'max_price' not in params) or r['restaurant_id'] in eligible]
     restaurant_type = _text_parameter(params, 'restaurant_type', 50)
     if restaurant_type:
         restaurants = [r for r in restaurants if r.get('restaurant_type') == restaurant_type]
@@ -196,6 +285,9 @@ def list_restaurants(params, repository):
     if sort == 'distance_asc':
         restaurants.sort(key=lambda item: (item['distance_km'] is None,
                          item['distance_km'] or 0, item['restaurant_id']))
+    elif sort in {'price_asc', 'price_desc'}:
+        restaurants.sort(key=lambda r: (r['min_menu_price'] is None,
+            (r['min_menu_price'] or 0) * (-1 if sort == 'price_desc' else 1), r['restaurant_id']))
     else:
         restaurants.sort(key=lambda restaurant: (restaurant['restaurant_name'].casefold(), restaurant['restaurant_id']))
     total = len(restaurants)
@@ -224,6 +316,7 @@ def get_restaurant_detail(restaurant_id, repository):
 
     menu_references = (repository.list_restaurant_menus(restaurant_id)
         if hasattr(repository, 'list_restaurant_menus') else repository.list_brand_menu_references(restaurant['brand']))
+    menu_references = [serialize_menu_detail(menu) for menu in menu_references]
     return {
         **restaurant,
         'brand_menu_reference': {
