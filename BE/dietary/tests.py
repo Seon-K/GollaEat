@@ -10,6 +10,7 @@ from .services import check_order, evaluate, rank_menus
 
 
 class DietaryTests(TestCase):
+    # 식이 판정·세션별 개인 활동 기본 검증
     def setUp(self):
         self.profile = Profile.objects.create(guest_id=uuid.uuid4())
         self.profile.criteria.add(Criterion.objects.get(code='allergen-milk'))
@@ -123,7 +124,8 @@ class DietaryTests(TestCase):
         self.send(c, 'put', '/api/profile', {'criteria': ['allergen-milk']})
         response = self.send(c, 'post', '/api/communication', {'components': [{'id': 'unknown', 'role': 'menu'}]}).json()
         self.assertIn('알레르기: 우유', response['text'])
-        self.assertIn('allergen-milk:milk', response['text'])
+        self.assertIn('우유 포함 여부 확인 필요', response['text'])
+        self.assertNotIn('allergen-milk:milk', response['text'])
         self.assertEqual(len(c.get('/api/allergens').json()['allergens']), 17)
 
     def test_profile_admin_requires_permission(self):

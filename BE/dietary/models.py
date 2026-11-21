@@ -23,7 +23,7 @@ class Criterion(models.Model):
 
 class SupportRule(models.Model):
     criterion = models.OneToOneField(Criterion, on_delete=models.CASCADE, related_name='rule')
-    # All listed canonical ingredient tags must be explicitly covered by A's data.
+    # A의 명시적 성분 정보 기반 제한 태그 검증
     excluded_tags = models.JSONField(default=list)
     source = models.CharField(max_length=500)
     enabled = models.BooleanField(default=True)
@@ -38,6 +38,7 @@ class SupportRule(models.Model):
 
 
 class Profile(models.Model):
+    # 서버 세션 UUID 기반 비회원 소유권
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     guest_id = models.UUIDField(unique=True, editable=False)
     criteria = models.ManyToManyField(Criterion, blank=True)
@@ -56,7 +57,7 @@ class Review(models.Model):
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE)
     menu_id = models.CharField(max_length=100)
     body = models.TextField(max_length=5000)
-    # Only explicitly consented criteria, copied at creation (never refreshed).
+    # 작성 당시 공개 동의 조건 스냅샷
     disclosed_conditions = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

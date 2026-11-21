@@ -2,15 +2,20 @@ import json
 import uuid
 from functools import wraps
 
-from django.db import transaction
+from django.db import connection, transaction
+from django.db.models import BooleanField
+from django.db.models.expressions import RawSQL
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
 
 from .models import Criterion, Favorite, Profile, Review
-from .services import check_order, communication, evaluate, rank_menus
+from .services import EvaluationContext, check_order, communication, evaluate, rank_menus
+from .validation import identifiers as ids, order_components
+from .pagination import page_parameters, paginate
 
 
 def endpoint(methods):
+    # 허용 메서드·JSON 입력 오류 공통 처리
     def decorate(fn):
         @wraps(fn)
         def wrapped(request, *args, **kwargs):
@@ -30,30 +35,14 @@ def endpoint(methods):
 
 
 def owner(request):
+    # 서버 세션 기반 소유자 식별
     if 'dietary_owner' not in request.session:
         request.session['dietary_owner'] = str(uuid.uuid4())
     return Profile.objects.get_or_create(guest_id=request.session['dietary_owner'])[0]
 
 
-def ids(value):
-    if not isinstance(value, list) or len(value) > 100 or any(not isinstance(x, str) or not x or len(x) > 100 for x in value):
-        raise ValueError('Expected up to 100 nonempty string IDs (max 100 characters)')
-    return value
-
-
 def components(payload):
-    values = payload['components']
-    if not isinstance(values, list) or not 1 <= len(values) <= 100:
-        raise ValueError('components must contain 1–100 items')
-    for c in values:
-        if not isinstance(c, dict):
-            raise ValueError('Each component must be an object')
-        ids([c['id']])
-        if c['role'] not in ['menu', 'sauce', 'topping', 'side', 'drink']:
-            raise ValueError('Invalid component role')
-        if 'modifications' in c:
-            ids(c['modifications'])
-    return values
+    return order_components(payload['components'])
 
 
 @endpoint(['GET'])
@@ -127,7 +116,12 @@ def favorites(request):
         mid = ids([request.payload['menu_id']])[0]
         item, created = Favorite.objects.get_or_create(profile=p, menu_id=mid)
         return JsonResponse({'id': item.pk, 'menu_id': mid}, status=201 if created else 200)
-    return JsonResponse({'favorites': [{'id': f.pk, 'menu_id': f.menu_id, 'judgement': evaluate(p, f.menu_id)} for f in Favorite.objects.filter(profile=p)]})
+    page, limit = page_parameters(request.GET)
+    selected, pagination = paginate(Favorite.objects.filter(profile=p).order_by('-created_at', '-pk'), page, limit)
+    # 현재 페이지 즐겨찾기의 최신 기준 재판정
+    context = EvaluationContext(p) if selected else None
+    return JsonResponse({'favorites': [{'id': f.pk, 'menu_id': f.menu_id, 'judgement': evaluate(p, f.menu_id, context=context)} for f in selected],
+                         'pagination': pagination})
 
 
 @endpoint(['DELETE'])
@@ -136,8 +130,9 @@ def favorite_detail(request, pk):
     return JsonResponse({'deleted': bool(count)}, status=200 if count else 404)
 
 
-def review_json(r):
-    return {'id': r.pk, 'menu_id': r.menu_id, 'body': r.body, 'disclosed_conditions': r.disclosed_conditions,
+def review_json(r, guest_id=None):
+    # 작성자 식별자 비공개, 현재 세션 본인 여부만 반환
+    return {'id': r.pk, 'menu_id': r.menu_id, 'body': r.body, 'is_mine': bool(guest_id and str(r.profile.guest_id) == guest_id), 'disclosed_conditions': r.disclosed_conditions,
             'created_at': r.created_at.isoformat(), 'updated_at': r.updated_at.isoformat()}
 
 
@@ -158,19 +153,38 @@ def reviews(request):
             raise ValueError('Disclosure must be a subset of your current restrictions')
         r = Review.objects.create(profile=p, menu_id=ids([request.payload['menu_id']])[0], body=review_body(request.payload),
                                   disclosed_conditions=[{'code': c.code, 'name': c.name, 'kind': c.kind} for c in selected])
-        return JsonResponse(review_json(r), status=201)
-    qs = Review.objects.order_by('-created_at', '-pk')
+        return JsonResponse(review_json(r, request.session.get('dietary_owner')), status=201)
+    # 신규 세션 생성 없는 공개 조회 및 현재 세션 기반 내 리뷰 필터
+    mine = request.GET.get('mine', 'false')
+    if mine not in ['true', 'false']:
+        raise ValueError('mine must be true or false')
+    qs = Review.objects.select_related('profile').order_by('-created_at', '-pk')
+    guest_id = request.session.get('dietary_owner')
+    if mine == 'true':
+        qs = qs.filter(profile__guest_id=guest_id) if guest_id else qs.none()
     if request.GET.get('menu_id'):
         qs = qs.filter(menu_id=request.GET['menu_id'])
-    conditions = request.GET.getlist('condition')
-    # JSON containment is not supported by SQLite; filter snapshots in Python.
-    results = [review_json(r) for r in qs if set(conditions) <= {c['code'] for c in r.disclosed_conditions}]
-    return JsonResponse({'reviews': results})
+    conditions = ids(request.GET.getlist('condition'))
+    page, limit = page_parameters(request.GET)
+    for index, code in enumerate(set(conditions)):
+        if connection.vendor == 'postgresql':
+            qs = qs.filter(disclosed_conditions__contains=[{'code': code}])
+        else:
+            # SQLite 공개 조건 DB 필터 및 매개변수 바인딩
+            alias = f'condition_match_{index}'
+            expression = RawSQL(
+                "EXISTS (SELECT 1 FROM json_each(dietary_review.disclosed_conditions) AS snapshot "
+                "WHERE json_extract(snapshot.value, '$.code') = %s)",
+                [code], output_field=BooleanField())
+            qs = qs.alias(**{alias: expression}).filter(**{alias: True})
+    selected, pagination = paginate(qs, page, limit)
+    return JsonResponse({'reviews': [review_json(r, guest_id) for r in selected], 'pagination': pagination})
 
 
 @endpoint(['GET', 'PATCH', 'DELETE'])
 def review_detail(request, pk):
-    qs = Review.objects.filter(pk=pk)
+    qs = Review.objects.select_related('profile').filter(pk=pk)
+    # 표시값과 독립적인 서버 수정·삭제 권한 검사
     if request.method != 'GET':
         qs = qs.filter(profile=owner(request))
     r = qs.first()
@@ -182,4 +196,4 @@ def review_detail(request, pk):
     if request.method == 'PATCH':
         r.body = review_body(request.payload)
         r.save(update_fields=['body', 'updated_at'])
-    return JsonResponse(review_json(r))
+    return JsonResponse(review_json(r, request.session.get('dietary_owner')))
