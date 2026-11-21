@@ -4,6 +4,7 @@ from django.http import JsonResponse
 from .repository import CatalogDataError, CsvCatalogRepository
 from .services import MenuQueryError, get_restaurant_detail, list_menus, list_restaurants
 from .services import list_restaurant_menus
+from .services import serialize_menu_detail
 
 
 def _csv_repository():
@@ -52,7 +53,7 @@ def menu_detail(request, menu_id):
     if request.method != 'GET':
         return _method_not_allowed()
     try:
-        result = _csv_repository().get_menu(menu_id)
+        result = serialize_menu_detail(_csv_repository().get_menu(menu_id))
     except CatalogDataError as exc:
         return _catalog_unavailable(exc)
     if result is None:

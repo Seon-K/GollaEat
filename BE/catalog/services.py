@@ -74,6 +74,23 @@ def _serialize(menu):
     }
 
 
+def serialize_menu_detail(menu):
+    """Add common objects without removing legacy fields or evidence."""
+    if menu is None:
+        return None
+    result = dict(menu)
+    result['restaurant'] = menu.get('restaurant', {
+        'restaurant_id': menu.get('restaurant_id'),
+        'restaurant_name': menu.get('restaurant_name'),
+    })
+    result['price'] = menu.get('price', {
+        'raw': menu.get('price_raw'), 'amount': menu.get('price_amount'),
+        'currency': 'KRW', 'status': menu.get('price_status', 'unknown'),
+    })
+    result.setdefault('branch_sale_status', 'unverified')
+    return result
+
+
 def list_menus(params, repository=None):
     unknown = sorted(set(params.keys()) - ALLOWED_PARAMETERS)
     if unknown:
@@ -224,6 +241,7 @@ def get_restaurant_detail(restaurant_id, repository):
 
     menu_references = (repository.list_restaurant_menus(restaurant_id)
         if hasattr(repository, 'list_restaurant_menus') else repository.list_brand_menu_references(restaurant['brand']))
+    menu_references = [serialize_menu_detail(menu) for menu in menu_references]
     return {
         **restaurant,
         'brand_menu_reference': {

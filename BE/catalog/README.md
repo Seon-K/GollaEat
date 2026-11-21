@@ -1,5 +1,44 @@
 # Catalog menu API v1
 
+## ORM 조회 및 최초 적재
+
+기본값 `CATALOG_USE_DB=true`는 기존 Django DB의 catalog 테이블을 조회한다.
+CSV는 `import_catalog` 실행 때만 필요하다. 기존 CSV 모드가 필요하면
+`CATALOG_USE_DB=false`로 명시한다. DB 모드에서 비어 있는 테이블은 빈 목록을 반환한다.
+
+```sh
+python manage.py migrate
+python manage.py import_catalog --csv /external/final.csv --coordinates /external/validation.csv
+```
+
+이 명령은 배포 담당자가 대상 DB와 백업을 확인한 후 실행한다. `--coordinates`는 선택이며
+미지정 시 기존 환경변수를 사용한다. 명시적으로 제외하려면 빈 문자열을 전달한다.
+재적재는 place_id·preprocess_row_id 기준 upsert이며 원본에 없는 기존 행도 삭제하지 않는다.
+메뉴 ID가 다른 식당으로 재할당되면 전체 적재를 롤백한다. 갱신본에서도 메뉴 ID를 보존해야 한다.
+B 즐겨찾기·리뷰의 문자열 메뉴 ID는 그대로 유지한다. 검증된 알레르기 연결 데이터가 없으므로
+DB 메뉴는 present/absent 태그를 추정하지 않는다.
+모델의 data JSON은 기존 응답 원문·옵션·검증 상태를 보존하고 FK와 PK로 식별 관계를 관리한다.
+
+## Common menu response objects
+
+`GET /api/menus`의 `results`, `GET /api/menus/{menu_id}`,
+`GET /api/restaurants/{restaurant_id}/menus`의 `results`는 다음 공통 구조를 반환한다.
+
+```json
+{
+  "menu_id": "menus_000001",
+  "menu_name": "메뉴명",
+  "restaurant": {"restaurant_id": "2025111196", "restaurant_name": "식당명"},
+  "price": {"raw": "79000.0", "amount": 79000, "currency": "KRW", "status": "fixed"},
+  "branch_sale_status": "unverified"
+}
+```
+
+가격 미확인은 `amount: null`, `status: unknown`이며 원문은 보존한다.
+매장 연결이 확인되지 않으면 `restaurant` 내부 ID·이름은 `null`이다.
+판매 여부는 `unverified`를 유지한다. 기존 상세·매장별 메뉴의 평면 필드와
+알레르겐·출처·검증 정보는 삭제하지 않는다. 상세와 목록의 추가 필드는 서로 다를 수 있다.
+
 백엔드 A의 Mock 기반 메뉴 목록·검색 API다. Django 모델과 DB 테이블은 만들지 않는다.
 `repository.MockMenuRepository`를 향후 DB 기반 저장소로 교체할 수 있도록 조회·검증 로직을
 `services.py`에 분리했다. 백엔드 B의 `dietary` 앱은 수정하지 않는다.

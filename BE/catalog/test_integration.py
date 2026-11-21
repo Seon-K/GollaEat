@@ -3,13 +3,14 @@ import json
 from unittest import skipUnless
 
 from django.conf import settings
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 
 from dietary.catalog import get_catalog
 from .repository import MENU_REQUIRED_COLUMNS, _load_csv
 
 
 @skipUnless(settings.CATALOG_MENU_CSV, 'Set CATALOG_MENU_CSV for real CSV integration')
+@override_settings(CATALOG_USE_DB=False)
 class RealCsvIntegrationTests(TestCase):
     def test_session_csrf_and_backend_b_endpoints(self):
         rows = _load_csv(settings.CATALOG_MENU_CSV, MENU_REQUIRED_COLUMNS, 'menu')

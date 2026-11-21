@@ -1,13 +1,14 @@
 import uuid
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from dietary.catalog import get_catalog
 from dietary.models import Criterion, Profile
 from dietary.services import evaluate
 
 
+@override_settings(CATALOG_USE_DB=False)
 class DietaryAdapterTests(TestCase):
     def test_csv_boundary_and_existing_judgement(self):
         menu = {

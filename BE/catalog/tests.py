@@ -83,6 +83,7 @@ class MenuListApiTests(SimpleTestCase):
         self.assertEqual(response['Allow'], 'GET')
 
 
+@override_settings(CATALOG_USE_DB=False)
 class RestaurantCsvApiTests(SimpleTestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()

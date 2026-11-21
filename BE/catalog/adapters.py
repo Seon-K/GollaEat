@@ -21,7 +21,7 @@ class DietaryCatalog:
     }
 
     def get_component(self, component_id):
-        if settings.CATALOG_FINAL_CSV:
+        if settings.CATALOG_USE_DB or settings.CATALOG_FINAL_CSV:
             from .final_repository import get_repository
             try:
                 menu = get_repository().get_menu(component_id)
