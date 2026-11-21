@@ -2,13 +2,16 @@ import json
 import uuid
 from functools import wraps
 
-from django.db import transaction
+from django.db import connection, transaction
+from django.db.models import BooleanField
+from django.db.models.expressions import RawSQL
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
 
 from .models import Criterion, Favorite, Profile, Review
 from .services import check_order, communication, evaluate, rank_menus
 from .validation import identifiers as ids, order_components
+from .pagination import page_parameters, paginate
 
 
 def endpoint(methods):
@@ -111,7 +114,10 @@ def favorites(request):
         mid = ids([request.payload['menu_id']])[0]
         item, created = Favorite.objects.get_or_create(profile=p, menu_id=mid)
         return JsonResponse({'id': item.pk, 'menu_id': mid}, status=201 if created else 200)
-    return JsonResponse({'favorites': [{'id': f.pk, 'menu_id': f.menu_id, 'judgement': evaluate(p, f.menu_id)} for f in Favorite.objects.filter(profile=p)]})
+    page, limit = page_parameters(request.GET)
+    selected, pagination = paginate(Favorite.objects.filter(profile=p).order_by('-created_at', '-pk'), page, limit)
+    return JsonResponse({'favorites': [{'id': f.pk, 'menu_id': f.menu_id, 'judgement': evaluate(p, f.menu_id)} for f in selected],
+                         'pagination': pagination})
 
 
 @endpoint(['DELETE'])
@@ -146,10 +152,21 @@ def reviews(request):
     qs = Review.objects.order_by('-created_at', '-pk')
     if request.GET.get('menu_id'):
         qs = qs.filter(menu_id=request.GET['menu_id'])
-    conditions = request.GET.getlist('condition')
-    # JSON containment is not supported by SQLite; filter snapshots in Python.
-    results = [review_json(r) for r in qs if set(conditions) <= {c['code'] for c in r.disclosed_conditions}]
-    return JsonResponse({'reviews': results})
+    conditions = ids(request.GET.getlist('condition'))
+    page, limit = page_parameters(request.GET)
+    for index, code in enumerate(set(conditions)):
+        if connection.vendor == 'postgresql':
+            qs = qs.filter(disclosed_conditions__contains=[{'code': code}])
+        else:
+            # Parameterized EXISTS keeps SQLite JSON snapshot filtering in the DB.
+            alias = f'condition_match_{index}'
+            expression = RawSQL(
+                "EXISTS (SELECT 1 FROM json_each(dietary_review.disclosed_conditions) AS snapshot "
+                "WHERE json_extract(snapshot.value, '$.code') = %s)",
+                [code], output_field=BooleanField())
+            qs = qs.alias(**{alias: expression}).filter(**{alias: True})
+    selected, pagination = paginate(qs, page, limit)
+    return JsonResponse({'reviews': [review_json(r) for r in selected], 'pagination': pagination})
 
 
 @endpoint(['GET', 'PATCH', 'DELETE'])
