@@ -10,7 +10,7 @@ def seed(apps, schema_editor):
         ('shrimp', '새우'), ('pork', '돼지고기'), ('peach', '복숭아'), ('tomato', '토마토'),
         ('sulfites', '아황산류'), ('chicken', '닭고기'), ('beef', '쇠고기'), ('squid', '오징어'), ('shellfish', '조개류'),
     ]
-    # Canonical group tags are defined in BACKEND_B.md. Nuts intentionally includes peanuts.
+    # 초기 성분 태그 기준, 견과류 그룹에 땅콩 포함
     for tag, name in allergens:
         c = Criterion.objects.create(code='allergen-' + tag, name=name, kind='allergen')
         Rule.objects.create(criterion=c, excluded_tags=[tag], source='GollaEat 성분 태그 계약 v1: ' + tag)

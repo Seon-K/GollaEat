@@ -10,6 +10,7 @@ from .services import check_order, evaluate, rank_menus
 
 
 class DietaryTests(TestCase):
+    # 식이 판정·세션별 개인 활동 기본 검증
     def setUp(self):
         self.profile = Profile.objects.create(guest_id=uuid.uuid4())
         self.profile.criteria.add(Criterion.objects.get(code='allergen-milk'))

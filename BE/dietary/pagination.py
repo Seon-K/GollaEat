@@ -15,6 +15,7 @@ def page_parameters(params):
 
 
 def paginate(queryset, page, limit):
+    # 필터·정렬 결과의 페이지 단위 조회
     total = queryset.count()
     pages = math.ceil(total / limit)
     selected = list(queryset[(page - 1) * limit:page * limit])

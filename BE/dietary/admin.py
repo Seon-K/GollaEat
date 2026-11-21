@@ -7,7 +7,7 @@ admin.site.register(SupportRule)
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    # Staff status alone never grants personal profile access.
+    # 직원 계정의 별도 프로필 조회 권한 요구
     def has_module_permission(self, request):
         return request.user.has_perm('dietary.view_profile')
 

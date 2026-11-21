@@ -8,6 +8,7 @@ from .services import evaluate, check_order, rank_menus
 
 
 class HardeningTests(TestCase):
+    # 입력 오류·페이지 필터·타인 데이터 접근 차단 검증
     def setUp(self):
         self.client.get('/api/session')
         self.profile = Profile.objects.get(guest_id=self.client.session['dietary_owner'])

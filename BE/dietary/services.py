@@ -1,5 +1,5 @@
 from .catalog import get_catalog
-from .models import Criterion, SupportRule
+from .models import Criterion
 from .validation import identifiers, order_components
 from .messages import unknown_messages
 
@@ -7,7 +7,7 @@ PRIORITY = {'match': 0, 'needs_check': 1, 'mismatch': 2}
 
 
 def validate_component(data):
-    """Malformed adapter evidence must never produce a match."""
+    """성분·출처 형식 검증 및 잘못된 적합 판정 방지"""
     if data is None:
         return None, False
     if not isinstance(data, dict):
@@ -38,30 +38,40 @@ def validate_component(data):
 
 
 def aggregate(results):
+    # 주문 전체 판정 우선순위: 부적합 > 확인 필요 > 적합
     return max((r['status'] for r in results), key=PRIORITY.get, default='match')
 
 
+class EvaluationContext:
+    """요청 단위 프로필·규칙 재사용"""
+    def __init__(self, profile, codes=None):
+        if codes is not None:
+            identifiers(codes)
+            self.criteria = list(Criterion.objects.filter(code__in=codes, active=True).select_related('rule'))
+            if len(self.criteria) != len(set(codes)):
+                raise ValueError('Unknown or inactive criterion')
+        else:
+            self.criteria = list(profile.criteria.select_related('rule').all())
+        self.rules = {}
+        for criterion in self.criteria:
+            rule = getattr(criterion, 'rule', None)
+            if rule and rule.enabled and rule.source:
+                self.rules[criterion.code] = rule
+            if codes is not None and criterion.kind != 'preference':
+                if criterion.code not in self.rules or not rule.excluded_tags:
+                    raise ValueError('Unsupported criterion: ' + criterion.code)
+
+
 def resolve_criteria(profile, codes):
-    """None uses the saved profile; a list supplies temporary criterion codes."""
-    if codes is None:
-        return list(profile.criteria.all())
-    identifiers(codes)
-    selected = list(Criterion.objects.filter(code__in=codes, active=True))
-    if len(selected) != len(set(codes)):
-        raise ValueError('Unknown or inactive criterion')
-    for criterion in selected:
-        if criterion.kind != 'preference':
-            rule = SupportRule.objects.filter(criterion=criterion, enabled=True).exclude(source='').first()
-            if not rule or not rule.excluded_tags:
-                raise ValueError('Unsupported criterion: ' + criterion.code)
-    return selected
+    return EvaluationContext(profile, codes).criteria
 
 
-def evaluate(profile, component_id, modifications=None, *, criteria=None):
+def evaluate(profile, component_id, modifications=None, *, criteria=None, context=None):
     identifiers([component_id])
     if modifications is not None:
         identifiers(modifications)
-    criteria = resolve_criteria(profile, criteria)
+    context = context if context is not None else EvaluationContext(profile, criteria)
+    criteria = context.criteria
     data = get_catalog().get_component(component_id)
     data, invalid_data = validate_component(data)
     reasons = []
@@ -70,11 +80,12 @@ def evaluate(profile, component_id, modifications=None, *, criteria=None):
     for criterion in criteria:
         if criterion.kind == 'preference':
             continue
-        rule = SupportRule.objects.filter(criterion=criterion, enabled=True).exclude(source='').first()
+        rule = context.rules.get(criterion.code)
         tags = set(rule.excluded_tags) if rule else set()
         present = set((data or {}).get('present_tags', []))
         absent = set((data or {}).get('absent_tags', []))
         sources = (data or {}).get('sources', [])
+        # 명시적 포함·불포함 비교, 누락 성분은 미확인 처리
         hits = tags & present
         missing = tags - present - absent
         if hits:
@@ -98,7 +109,7 @@ def evaluate(profile, component_id, modifications=None, *, criteria=None):
     if invalid_data:
         unknown.append('invalid_component_data')
     if modifications:
-        # Client requests are not evidence that ingredients have been removed.
+        # 미검증 재료 제거 요청의 안전 추정 금지
         unknown.append('unverified_modifications')
     status = aggregate(reasons)
     if unknown and status != 'mismatch':
@@ -114,20 +125,24 @@ def evaluate(profile, component_id, modifications=None, *, criteria=None):
 
 
 def rank_menus(profile, menu_ids, *, criteria=None):
+    # 판정 상태 우선, 동일 상태 내 선호 반영
     identifiers(menu_ids)
-    resolve_criteria(profile, criteria)
-    return sorted((evaluate(profile, mid, criteria=criteria) for mid in menu_ids), key=lambda r: r['sort_key'])
+    context = EvaluationContext(profile, criteria)
+    return sorted((evaluate(profile, mid, context=context) for mid in menu_ids), key=lambda r: r['sort_key'])
 
 
-def check_order(profile, components):
+def check_order(profile, components, *, context=None):
     order_components(components)
-    results = [dict(evaluate(profile, c['id'], c.get('modifications')), role=c['role']) for c in components]
+    context = context if context is not None else EvaluationContext(profile)
+    results = [dict(evaluate(profile, c['id'], c.get('modifications'), context=context), role=c['role']) for c in components]
     return {'status': aggregate(results), 'components': results}
 
 
 def communication(profile, components):
-    order = check_order(profile, components)
-    criteria = list(profile.criteria.exclude(kind='preference'))
+    # 프로필·미확인 항목 기반 고정 안내 문구
+    context = EvaluationContext(profile)
+    order = check_order(profile, components, context=context)
+    criteria = [c for c in context.criteria if c.kind != 'preference']
     allergies = '、'.join(c.name for c in criteria if c.kind == 'allergen') or '등록 없음'
     other = '、'.join(c.name for c in criteria if c.kind != 'allergen') or '등록 없음'
     unknown = sorted({x for r in order['components'] for x in r['unknown_messages']})
