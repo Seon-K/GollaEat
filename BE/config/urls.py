@@ -17,7 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 from .views import health
-from AI.chatbot.views import chat_view
+from chatbot.views import chat_view
 
 urlpatterns = [
     path('api/chat', chat_view),

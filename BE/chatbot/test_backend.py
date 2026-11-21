@@ -3,8 +3,8 @@ from unittest.mock import patch
 
 from django.test import TestCase
 from dietary.models import Criterion, Profile
-from AI.chatbot.backend import BackendSearch
-from AI.chatbot.chatbot import chat
+from chatbot.backend import BackendSearch
+from chatbot.chatbot import chat
 
 
 class BackendSearchTests(TestCase):
@@ -12,7 +12,7 @@ class BackendSearchTests(TestCase):
         self.profile = Profile.objects.create(guest_id=uuid.uuid4())
         self.profile.criteria.add(Criterion.objects.get(code='allergen-milk'))
         self.search = BackendSearch(self.profile)
-        self.catalog = patch('AI.chatbot.backend.get_catalog').start().return_value
+        self.catalog = patch('chatbot.backend.get_catalog').start().return_value
         patch('dietary.services.get_catalog', return_value=self.catalog).start()
         self.addCleanup(patch.stopall)
         self.catalog.get_component.side_effect = lambda mid: {
@@ -49,7 +49,7 @@ class BackendSearchTests(TestCase):
 
     def test_unavailable_and_ambiguous_place(self):
         from dietary.catalog import UnavailableCatalog
-        with patch('AI.chatbot.backend.get_catalog', return_value=UnavailableCatalog()):
+        with patch('chatbot.backend.get_catalog', return_value=UnavailableCatalog()):
             self.assertIn('위치', self.search(self.search.initial_state())['question'])
         self.catalog.search_menus.return_value = {'question': '어느 지점인가요?'}
         self.assertEqual(self.search(self.search.initial_state()), {'question': '어느 지점인가요?'})
@@ -60,8 +60,8 @@ class BackendSearchTests(TestCase):
         self.catalog.search_menus.assert_not_called()
 
     def test_coordinate_search_uses_catalog_services(self):
-        from AI.chatbot.catalog_search import nearby_menus, validate_location
-        with patch('AI.chatbot.catalog_search.get_repository') as factory:
+        from chatbot.catalog_search import nearby_menus, validate_location
+        with patch('chatbot.catalog_search.get_repository') as factory:
             repository = factory.return_value
             repository.list_restaurants.return_value = [
                 {'restaurant_id': 'r', 'restaurant_name': '가게', 'brand': '', 'address': ''}]

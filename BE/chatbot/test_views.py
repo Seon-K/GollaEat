@@ -7,7 +7,7 @@ class ChatApiTests(TestCase):
     def send(self, client, body):
         return client.post('/api/chat', json.dumps(body), content_type='application/json')
 
-    @patch('AI.chatbot.views.parse_gemini')
+    @patch('chatbot.views.parse_gemini')
     def test_followup_reset_and_isolation(self, parse):
         a, b = Client(), Client()
         parse.return_value = {'place': '순천향대', 'allergens': ['우유']}
@@ -20,7 +20,7 @@ class ChatApiTests(TestCase):
         result = self.send(a, {'new_conversation': True}).json()
         self.assertNotIn('allergens', result['state'])
 
-    @patch('AI.chatbot.views.parse_gemini', side_effect=ValueError('failed'))
+    @patch('chatbot.views.parse_gemini', side_effect=ValueError('failed'))
     def test_failure_preserves_state(self, parse):
         c = Client()
         self.send(c, {'new_conversation': True})

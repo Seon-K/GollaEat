@@ -19,7 +19,9 @@
 BE/.venv/Scripts/python.exe BE/manage.py migrate
 # 기존 로컬 프로필 UUID 조회
 BE/.venv/Scripts/python.exe BE/manage.py shell -c "from dietary.models import Profile; print(list(Profile.objects.values_list('id', flat=True)))"
-BE/.venv/Scripts/python.exe AI/chatbot/chatbot.py --backend --profile-id <프로필UUID> --gemini
+Push-Location BE
+.venv/Scripts/python.exe -m chatbot.chatbot --backend --profile-id <프로필UUID> --gemini
+Pop-Location
 ```
 
 `GEMINI_API_KEY`는 환경변수에서 읽는다. `--gemini`를 빼면 제한된 데모 입력 해석기를 사용한다.
@@ -45,5 +47,5 @@ Django 서버의 `GET /api/session`에서 `csrf_token`을 받는다. 같은 세�
 ## 검증
 
 ```powershell
-BE/.venv/Scripts/python.exe BE/manage.py test dietary AI.chatbot.test_backend AI.chatbot.test_views
+BE/.venv/Scripts/python.exe BE/manage.py test dietary chatbot.test_backend chatbot.test_views
 ```

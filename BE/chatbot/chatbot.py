@@ -177,13 +177,10 @@ if __name__ == "__main__":
     state = {"radius_m": 1000}
     search = demo_search
     if args.backend:
-        import sys
-        from pathlib import Path
-        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "BE"))
         os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
         import django
         django.setup()
-        from AI.chatbot.backend import BackendSearch
+        from chatbot.backend import BackendSearch
         from dietary.models import Profile
         if not args.profile_id:
             parser.error("--backend에는 기존 --profile-id가 필요합니다.")
