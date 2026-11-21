@@ -15,8 +15,17 @@ def validate_location(location):
 
 
 def nearby_menus(state):
-    if state.get('place'):
-        return {'question': '요청한 장소의 좌표를 선택해 주세요. 장소명 검색 연결이 필요해요.'}
+    if state.get('place') and state.get('resolved_place') != state['place']:
+        from .places import search_places
+        try:
+            candidates = search_places(state['place'])
+        except (OSError, ValueError, KeyError, TypeError):
+            return {'question': '장소 검색을 완료하지 못했어요. 잠시 후 다시 시도하거나 지도에서 위치를 선택해 주세요.'}
+        if len(candidates) != 1:
+            return {'question': '검색 기준 장소를 선택해 주세요.' if candidates else '장소를 찾지 못했어요. 주소나 더 구체적인 장소명을 입력해 주세요.',
+                    'place_candidates': candidates}
+        state['location'] = candidates[0]['location']
+        state['resolved_place'] = state['place']
     if not state.get('location'):
         return {'question': '주변 검색을 위해 위치를 선택해 주세요.'}
     repository = get_repository()

@@ -50,7 +50,7 @@ class BackendSearch:
             response = catalog.search_menus(place=state.get('place'), menu=state.get('menu'),
                                         restaurant=state.get('restaurant'), radius_m=radius)
         if 'question' in response:
-            return {'question': response['question']}
+            return response
         groups = {'matched': {}, 'needs_check': {}}
         seen = set()
         for row in response['menus']:
