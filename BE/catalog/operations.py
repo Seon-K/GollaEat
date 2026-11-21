@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError, PermissionDenied
 from django.db import transaction
 from django.utils import timezone
 
-from .models import InformationReport, ReportEvent
+from .models import InformationReport, ReportEvent, Menu, Restaurant
 from .repository import normalize_brand
 
 
@@ -101,12 +101,14 @@ def declared_tags(items):
 
 @transaction.atomic
 def apply_report(report_id, reviewer):
-    report = InformationReport.objects.select_for_update().select_related('menu', 'restaurant').get(pk=report_id)
+    # PostgreSQL cannot lock nullable sides of an OUTER JOIN. Lock each row separately.
+    report = InformationReport.objects.select_for_update().get(pk=report_id)
     if not reviewer.has_perm('catalog.change_informationreport'):
         raise PermissionDenied
     if report.status not in {'pending', 'reviewing'}:
         raise ValidationError('이미 처리된 제보입니다.')
-    target = report.menu or report.restaurant
+    target = (Menu.objects.select_for_update().get(pk=report.menu_id) if report.menu_id else
+              Restaurant.objects.select_for_update().get(pk=report.restaurant_id))
     permission = 'catalog.change_menu' if report.menu_id else 'catalog.change_restaurant'
     if not reviewer.has_perm(permission):
         raise PermissionDenied
