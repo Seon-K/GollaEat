@@ -1,6 +1,7 @@
 from .catalog import get_catalog
 from .models import Criterion, SupportRule
 from .validation import identifiers, order_components
+from .messages import unknown_messages
 
 PRIORITY = {'match': 0, 'needs_check': 1, 'mismatch': 2}
 
@@ -104,8 +105,10 @@ def evaluate(profile, component_id, modifications=None, *, criteria=None):
         status = 'needs_check'
     preferences = {c.code for c in criteria if c.kind == 'preference'}
     score = len(preferences & set((data or {}).get('preference_tags', [])))
+    messages = unknown_messages(sorted(set(unknown)), {c.code: c.name for c in criteria})
     return {'component_id': component_id, 'status': status, 'reasons': reasons,
             'problem_ingredients': sorted(problems), 'unknown_items': sorted(set(unknown)),
+            'unknown_messages': messages,
             'sources': (data or {}).get('sources', []), 'preference_score': score,
             'sort_key': [PRIORITY[status], -score, component_id]}
 
@@ -127,7 +130,7 @@ def communication(profile, components):
     criteria = list(profile.criteria.exclude(kind='preference'))
     allergies = '、'.join(c.name for c in criteria if c.kind == 'allergen') or '등록 없음'
     other = '、'.join(c.name for c in criteria if c.kind != 'allergen') or '등록 없음'
-    unknown = sorted({x for r in order['components'] for x in r['unknown_items']})
+    unknown = sorted({x for r in order['components'] for x in r['unknown_messages']})
     return {'status': order['status'], 'text': f'알레르기: {allergies}. 기타 섭취 제한: {other}. '
             f'선택 구성: {", ".join(c["id"] for c in components)}. '
             f'확인 필요: {", ".join(unknown) or "추가 미확인 항목 없음"}. '
