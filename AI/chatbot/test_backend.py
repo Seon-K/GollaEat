@@ -50,7 +50,7 @@ class BackendSearchTests(TestCase):
     def test_unavailable_and_ambiguous_place(self):
         from dietary.catalog import UnavailableCatalog
         with patch('AI.chatbot.backend.get_catalog', return_value=UnavailableCatalog()):
-            self.assertIn('연동 준비', self.search(self.search.initial_state())['question'])
+            self.assertIn('위치', self.search(self.search.initial_state())['question'])
         self.catalog.search_menus.return_value = {'question': '어느 지점인가요?'}
         self.assertEqual(self.search(self.search.initial_state()), {'question': '어느 지점인가요?'})
 
@@ -58,3 +58,21 @@ class BackendSearchTests(TestCase):
         with self.assertRaises(ValueError):
             self.search(dict(self.search.initial_state(), ingredients=['없는 재료']))
         self.catalog.search_menus.assert_not_called()
+
+    def test_coordinate_search_uses_catalog_services(self):
+        from AI.chatbot.catalog_search import nearby_menus, validate_location
+        with patch('AI.chatbot.catalog_search.get_repository') as factory:
+            repository = factory.return_value
+            repository.list_restaurants.return_value = [
+                {'restaurant_id': 'r', 'restaurant_name': '가게', 'brand': '', 'address': ''}]
+            repository.coordinates.return_value = {'r': (36.0, 127.0)}
+            repository.get_restaurant.return_value = repository.list_restaurants.return_value[0]
+            repository.list_restaurant_menus.return_value = [
+                {'menu_id': 'm', 'menu_name': '김밥'}]
+            result = nearby_menus({'location': {'lat': 36.0, 'lng': 127.0}, 'menu': '김밥'})
+            self.assertEqual(result['menus'][0]['menu_id'], 'm')
+            self.assertEqual(result['menus'][0]['distance_m'], 0)
+            self.assertEqual(nearby_menus({'location': {'lat': 35.0, 'lng': 127.0}})['menus'], [])
+        with self.assertRaises(ValueError):
+            validate_location({'lat': True, 'lng': 127})
+

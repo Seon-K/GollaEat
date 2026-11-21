@@ -155,7 +155,7 @@ def chat(message, state, parse=parse_demo, search=demo_search):
             next_state[field] = value
     if "question" in change:
         return state, {"question": change["question"]}
-    if not next_state.get("place") and not next_state.get("restaurant"):
+    if not next_state.get("place") and not next_state.get("restaurant") and not next_state.get("location"):
         return next_state, {"question": "어느 장소 근처에서 찾을까요?"}
     if not (next_state.get("allergens") or next_state.get("ingredients") or next_state.get("criteria")):
         return next_state, {"question": "어떤 알레르기나 제한 재료를 적용할까요?"}
@@ -183,7 +183,7 @@ if __name__ == "__main__":
         os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
         import django
         django.setup()
-        from backend import BackendSearch
+        from AI.chatbot.backend import BackendSearch
         from dietary.models import Profile
         if not args.profile_id:
             parser.error("--backend에는 기존 --profile-id가 필요합니다.")

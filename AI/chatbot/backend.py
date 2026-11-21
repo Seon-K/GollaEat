@@ -44,8 +44,10 @@ class BackendSearch:
             raise ValueError('검색 반경은 양수여야 합니다.')
         catalog = get_catalog()
         if not callable(getattr(catalog, 'search_menus', None)):
-            return {'question': '실제 매장 검색 연동 준비 중입니다. 아직 주변 메뉴를 조회할 수 없어요.'}
-        response = catalog.search_menus(place=state.get('place'), menu=state.get('menu'),
+            from .catalog_search import nearby_menus
+            response = nearby_menus(state)
+        else:
+            response = catalog.search_menus(place=state.get('place'), menu=state.get('menu'),
                                         restaurant=state.get('restaurant'), radius_m=radius)
         if 'question' in response:
             return {'question': response['question']}
@@ -69,6 +71,7 @@ class BackendSearch:
                 'restaurant_id': row['restaurant_id'], 'restaurant': row['restaurant_name'],
                 'distance_m': distance, 'menus': []})
             store['menus'].append({'menu_id': row['menu_id'], 'name': row['menu_name'],
-                                   'reason': reason_text(judgement), 'judgement': judgement})
+                                   'reason': reason_text(judgement), 'judgement': judgement,
+                                   'branch_sale_status': row.get('branch_sale_status', 'unverified')})
         return {**{key: sorted(stores.values(), key=lambda x: (x['distance_m'], x['restaurant_id']))
                    for key, stores in groups.items()}, 'criteria': codes, 'radius_m': radius}

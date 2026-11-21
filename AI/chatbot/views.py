@@ -2,6 +2,7 @@ from django.http import JsonResponse
 
 from dietary.views import endpoint, owner
 from .backend import BackendSearch
+from .catalog_search import validate_location
 from .chatbot import chat, format_response, parse_gemini
 
 
@@ -17,6 +18,10 @@ def chat_view(request):
     state = request.session.get('chat_state')
     if reset or state is None:
         state = search.initial_state()
+    state = dict(state)
+    if 'location' in request.payload:
+        state['location'] = validate_location(request.payload['location'])
+        state.pop('place', None)
     if not message.strip():
         request.session['chat_state'] = state
         return JsonResponse({'message': '새 대화를 시작했어요.', 'state': state, 'result': {}})
