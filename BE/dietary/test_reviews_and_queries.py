@@ -82,7 +82,8 @@ class EvaluationQueryTests(TestCase):
             order = check_order(self.profile, parts)
         self.assertEqual(order['status'], 'mismatch')
         self.assertEqual(order['components'], [dict(r, role='menu') for r in expected])
-        with self.assertNumQueries(1):
+        # 판정 기준 1회 + 메뉴 표시 정보 1회
+        with self.assertNumQueries(2):
             self.assertEqual(communication(self.profile, parts)['status'], 'mismatch')
 
     def test_next_call_reads_updated_profile_and_rule(self):

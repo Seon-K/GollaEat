@@ -12,6 +12,7 @@ from .models import Criterion, Favorite, Profile, Review
 from .services import EvaluationContext, check_order, communication, evaluate, rank_menus
 from .validation import identifiers as ids, order_components
 from .pagination import page_parameters, paginate
+from .catalog_info import component_summaries
 
 
 def endpoint(methods):
@@ -120,7 +121,11 @@ def favorites(request):
     selected, pagination = paginate(Favorite.objects.filter(profile=p).order_by('-created_at', '-pk'), page, limit)
     # 현재 페이지 즐겨찾기의 최신 기준 재판정
     context = EvaluationContext(p) if selected else None
-    return JsonResponse({'favorites': [{'id': f.pk, 'menu_id': f.menu_id, 'judgement': evaluate(p, f.menu_id, context=context)} for f in selected],
+    summaries = component_summaries([f.menu_id for f in selected])
+    return JsonResponse({'favorites': [{'id': f.pk, 'menu_id': f.menu_id,
+                         'menu': summaries.get(f.menu_id),
+                         'catalog_status': 'available' if f.menu_id in summaries else 'unavailable',
+                         'judgement': evaluate(p, f.menu_id, context=context)} for f in selected],
                          'pagination': pagination})
 
 

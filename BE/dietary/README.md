@@ -1,5 +1,48 @@
 # 백엔드 B API / A 연동 계약
 
+## A ORM 메뉴 정보 연동
+
+`CATALOG_USE_DB=true`일 때 A의 Menu·Restaurant·MenuComponent를 재사용한다.
+B에 메뉴 모델·복사 데이터·외래키를 추가하지 않으며 기존 문자열 메뉴 ID를 유지한다.
+표시 정보는 페이지·주문 단위로 일괄 조회한다(메뉴 1회, 옵션 포함 시 추가 1회).
+
+즐겨찾기 목록의 기존 id/menu_id/judgement 필드에 `menu`, `catalog_status`가 추가된다.
+
+```json
+{
+  "id": 1,
+  "menu_id": "m1",
+  "catalog_status": "available",
+  "menu": {
+    "component_id": "m1", "name": "두부 샐러드", "role": "menu",
+    "menu_id": "m1", "menu_name": "두부 샐러드",
+    "restaurant": {"restaurant_id": "r1", "restaurant_name": "테스트 매장"},
+    "price": {"amount": 9000, "currency": "KRW", "status": "fixed"},
+    "sale_status": "unverified"
+  },
+  "judgement": {"status": "needs_check"}
+}
+```
+
+judgement는 기존 전체 판정 필드를 유지하며 위 예시는 축약이다.
+catalog_status는 표시 정보 조회 가능 여부이며 판매 여부나 식이 적합성을 의미하지 않는다.
+판매 여부는 menu.sale_status, 식이 조건은 judgement.status로 구분한다.
+누락·삭제 메뉴 및 DB 외 모드는 menu=null, catalog_status=unavailable로 반환한다.
+즐겨찾기는 자동 삭제하지 않으며 저장 당시 정보 대신 현재 DB 정보를 반환한다.
+기존 동작과 호환되도록 등록 API의 메뉴 ID 정책은 변경하지 않는다.
+가격 미확인은 amount=null, status=unknown이며 0원과 구분한다.
+
+`POST /api/communication`의 text에는 선택한 메뉴·옵션의 실제 이름이 들어간다.
+예: `선택 구성: 두부 샐러드, 우유 소스`.
+응답 order.components에는 표시용 name이 추가되며 기존 component_id·판정 필드는 유지된다.
+미조회 구성은 name=null, 문구에는 `이름 미확인 구성 (요청 ID)`로 표시한다.
+이름이나 가격 등 표시 정보는 성분 근거로 사용하지 않는다.
+
+실제 검증된 성분, 출처 유효성, 기본 구성품 반영은 A의 DietaryCatalog를 통해 기존 공통 판정에 연결한다.
+통합 테스트에서는 공식/매장 출처의 확인 성분, 출처 만료, 미검증 정보, 불포함 범위 누락,
+기본/선택 구성품, 최신 프로필·메뉴 갱신, 타 세션 접근 차단을 검증한다.
+DB 모델 변경 및 추가 마이그레이션은 없다.
+
 ## 내 리뷰 및 본인 여부
 
 리뷰 목록·상세·작성·수정 응답에 현재 비회원 세션 기준 `is_mine`이 추가된다.

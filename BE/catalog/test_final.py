@@ -1,14 +1,21 @@
 import os
 import json
+import io
 from unittest import skipUnless
 from django.test import TestCase, Client, override_settings
+from django.core.management import call_command
+from .models import Menu, Restaurant, MenuComponent, BusinessHours, FoodDeclaration, AllergenLink
 
 
 @skipUnless(os.getenv('FINAL_TEST_CSV'), 'External final CSV not supplied')
 class FinalDataTests(TestCase):
     def test_final_catalog_and_backend_b(self):
         with override_settings(CATALOG_FINAL_CSV=os.environ['FINAL_TEST_CSV'],
+                CATALOG_USE_DB=True,
                 CATALOG_COORDINATE_VALIDATION_CSV=os.getenv('FINAL_TEST_VALIDATION', '')):
+            call_command('import_catalog', verbosity=0)
+            self.assertEqual(Restaurant.objects.count(), 356)
+            self.assertEqual(Menu.objects.count(), 8436)
             client = Client(enforce_csrf_checks=True)
             menus = client.get('/api/menus', {'limit': 2}).json()
             self.assertEqual(menus['pagination']['total'], 8436)
@@ -16,8 +23,17 @@ class FinalDataTests(TestCase):
             restaurants = client.get('/api/restaurants', {'limit': 1}).json()
             self.assertEqual(restaurants['pagination']['total'], 356)
             rid = restaurants['results'][0]['restaurant_id']
-            self.assertEqual(client.get('/api/menus/' + mid).status_code, 200)
+            menu_detail = client.get('/api/menus/' + mid)
+            self.assertEqual(menu_detail.status_code, 200)
+            self.assertEqual(menu_detail.json()['price'], menus['results'][0]['price'])
+            self.assertEqual(menu_detail.json()['restaurant'], menus['results'][0]['restaurant'])
             detail = client.get('/api/restaurants/' + rid).json()
+            branch_menus = client.get('/api/restaurants/' + rid + '/menus').json()['results']
+            self.assertTrue(branch_menus)
+            for item in branch_menus:
+                single = client.get('/api/menus/' + item['menu_id']).json()
+                self.assertEqual(item['price'], single['price'])
+                self.assertEqual(item['restaurant'], single['restaurant'])
             self.assertIn('coordinate_validation_status', detail)
             self.assertEqual(client.get('/api/restaurants/' + rid + '/menus').status_code, 200)
             self.assertTrue(client.get('/api/menus', {'q': menus['results'][0]['menu_name']}).json()['results'])
@@ -42,3 +58,34 @@ class FinalDataTests(TestCase):
             self.assertEqual(send('/api/orders/check', {'components': [{'id': mid, 'role': 'menu'}]})['status'], 'needs_check')
             send('/api/favorites', {'menu_id': mid})
             send('/api/reviews', {'menu_id': mid, 'body': 'test'})
+            base_menu = Menu.objects.get(pk=mid)
+            option = MenuComponent.objects.create(menu=base_menu, name='test-only option', role='sauce')
+            hours = BusinessHours.objects.create(restaurant_id=rid, weekday=0, is_closed=True)
+            declaration = FoodDeclaration.objects.create(menu=base_menu, kind='allergen', name_raw='test-only unknown', canonical_tag='milk')
+            preserved = Restaurant.objects.get(pk=rid)
+            preserved.latitude, preserved.longitude = 36.7, 127.0
+            preserved.save(update_fields=['latitude', 'longitude'])
+            call_command('import_catalog', verbosity=0)
+            self.assertEqual(Restaurant.objects.count(), 356)
+            self.assertEqual(Menu.objects.count(), 8436)
+            self.assertTrue(MenuComponent.objects.filter(pk=option.pk).exists())
+            self.assertTrue(BusinessHours.objects.filter(pk=hours.pk).exists())
+            self.assertTrue(FoodDeclaration.objects.filter(pk=declaration.pk).exists())
+            preserved.refresh_from_db()
+            self.assertEqual((preserved.latitude, preserved.longitude), (36.7, 127.0))
+            self.assertEqual(client.get('/api/favorites').json()['favorites'][0]['menu_id'], mid)
+            self.assertTrue(client.get('/api/reviews', {'menu_id': mid}).json()['reviews'])
+            with override_settings(CATALOG_FINAL_CSV='missing-file', CATALOG_COORDINATE_VALIDATION_CSV='missing-file'):
+                self.assertEqual(client.get('/api/menus/' + mid).status_code, 200)
+            if os.getenv('FINAL_TEST_ALLERGENS') and os.getenv('FINAL_TEST_BRANDS'):
+                output = io.StringIO()
+                call_command('import_catalog_allergens', allergens=os.environ['FINAL_TEST_ALLERGENS'],
+                    brand_restaurants=os.environ['FINAL_TEST_BRANDS'], stdout=output)
+                stats = json.loads(output.getvalue())
+                self.assertEqual(sum(stats.values()), 8436)
+                self.assertEqual(AllergenLink.objects.count(), 715)
+                self.assertEqual(AllergenLink.objects.filter(status='verified_source').count(), 2)
+                for link in AllergenLink.objects.filter(status='verified_source'):
+                    self.assertEqual(send('/api/judgements', {'menu_id': link.menu_id})['status'], 'mismatch')
+                reference = AllergenLink.objects.filter(status='reference').first()
+                self.assertEqual(send('/api/judgements', {'menu_id': reference.menu_id})['status'], 'needs_check')
