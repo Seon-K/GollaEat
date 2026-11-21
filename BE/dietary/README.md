@@ -1,5 +1,50 @@
 # 백엔드 B API / A 연동 계약
 
+## 내 리뷰 및 본인 여부
+
+리뷰 목록·상세·작성·수정 응답에 현재 비회원 세션 기준 `is_mine`이 추가된다.
+작성자 식별자(profile ID, guest ID)는 반환하지 않는다. 세션이 없는 공개 조회는 모두 false이며
+조회만으로 프로필을 만들지 않는다. 수정·삭제 권한은 표시값과 별개로 서버에서 계속 검사한다.
+
+```json
+{"id":12,"menu_id":"menu-1","body":"방문 후기","is_mine":true,"disclosed_conditions":[],"created_at":"...","updated_at":"..."}
+```
+
+`GET /api/reviews?mine=true&page=1&limit=20`은 내 리뷰만 조회한다.
+`menu_id`, 반복 가능한 `condition`, 페이지네이션과 함께 사용할 수 있다. 필터는 모두 AND 조건이다.
+예: `/api/reviews?mine=true&menu_id=menu-1&condition=allergen-milk`.
+mine은 생략하거나 false면 전체 공개 리뷰, true면 본인 리뷰이며 다른 값은 400이다.
+세션이 없는 mine=true 요청은 빈 목록이다. 사용자 ID를 지정해 다른 사람의 비공개 소유권을 조회하는 방식은 지원하지 않는다.
+
+## 판정 조회 최적화
+
+메뉴 순위·주문 조합·즐겨찾기 페이지·안내 문구 생성 시 요청 범위의 EvaluationContext를 사용한다.
+프로필 기준과 지원 규칙은 JOIN 쿼리 한 번으로 읽어 재사용하고, 응답의 판정·정렬 형식은 유지한다.
+요청 간 캐시는 사용하지 않아 다음 요청부터 변경된 프로필·규칙이 반영된다.
+메뉴 데이터 조회는 기존 A 어댑터를 사용하며 A의 CSV/DB 조회 방식은 변경하지 않는다.
+테스트에서는 100개 메뉴 순위 및 주문·안내 문구의 B 기준 조회가 각각 한 번인지 확인한다.
+
+## PostgreSQL 테스트 (운영 DB와 분리)
+
+Docker가 설치되어 있다면 BE 폴더에서 다음을 실행한다. 테스트 전용 계정/비밀번호이며 운영용이 아니다.
+
+```powershell
+docker compose -f compose.postgres-test.yml up -d --wait
+.\.venv\Scripts\python.exe manage.py test dietary catalog --noinput --settings=config.test_postgres
+docker compose -f compose.postgres-test.yml down
+```
+
+전용 설정은 `DATABASE_URL`을 DB 접속에 사용하지 않고 로컬 127.0.0.1:55432의 gollaeat_test_base만 사용한다.
+Django가 test_gollaeat DB를 생성해 마이그레이션과 테스트를 실행한 후 삭제한다.
+Docker 컨테이너의 데이터는 메모리에만 저장하며 운영 Supabase나 기존 SQLite 데이터를 변경하지 않는다.
+로컬 포트 변경 시 compose 포트와 `POSTGRES_TEST_PORT`를 함께 변경해야 한다.
+전용 설정으로 runserver/migrate를 실행하지 말고 테스트 명령에만 사용한다.
+
+GitHub Actions의 `Backend PostgreSQL tests`는 임시 PostgreSQL 16을 띄워 같은 테스트를 실행한다.
+기존 SQLite 검사도 유지한다. 조건 필터·페이지네이션·유일성·소유권·쿼리 수 테스트를 양쪽 DB에서 검사한다.
+외부 CSV가 필요한 기존 테스트 2개는 별도 데이터 없이 건너뛴다.
+로컬에서 PostgreSQL 실행 도구가 없으면 SQLite 검증만 가능하며 PostgreSQL 실행 결과는 CI에서 확인해야 한다.
+
 ## 목록 조회 및 안내 문구 보완
 
 `GET /api/favorites?page=1&limit=20`, `GET /api/reviews?page=1&limit=20`으로 나눠 조회한다.
