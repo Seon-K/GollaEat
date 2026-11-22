@@ -10,3 +10,8 @@ npm-debug.log*
 .vercel
 *.tsbuildinfo
 /*.pdf
+body1.json
+cookies.txt
+headers.txt
+put*.json
+session.json
