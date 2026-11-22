@@ -1,7 +1,7 @@
 from .catalog import get_catalog
 from .models import Criterion
 from .validation import identifiers, order_components
-from .messages import unknown_messages
+from .messages import unknown_messages, judgement_guidance
 from .catalog_info import component_summaries
 from .order_validation import validate_selection
 from .analysis_reference import ai_evidence
@@ -143,6 +143,7 @@ def evaluate(profile, component_id, modifications=None, *, criteria=None, contex
     score = 0
     messages = unknown_messages(sorted(set(unknown)), {c.code: c.name for c in criteria})
     return {'component_id': component_id, 'status': status, 'reasons': reasons,
+            'guidance': judgement_guidance(status, reasons, bool(criteria)),
             'problem_ingredients': sorted(problems), 'unknown_items': sorted(set(unknown)),
             'unknown_messages': messages,
             'ai_evidence': list(relevant_ai.values()),
@@ -166,7 +167,9 @@ def check_order(profile, components, *, context=None):
     status = aggregate(results)
     if status == 'match' and selection['status'] == 'needs_check':
         status = 'needs_check'
-    return {'status': status, 'components': results, 'selection_validation': selection}
+    reasons = [reason for result in results for reason in result['reasons']]
+    return {'status': status, 'components': results, 'selection_validation': selection,
+            'guidance': judgement_guidance(status, reasons, bool(context.criteria))}
 
 
 def communication(profile, components):
@@ -188,7 +191,8 @@ def communication(profile, components):
               else f'이름 미확인 구성 ({c["id"]})' for c in components]
     for result in order['components']:
         result['name'] = summaries.get(result['component_id'], {}).get('name')
-    return {'status': order['status'], 'text': f'알레르기: {allergies}. 기타 섭취 제한: {other}. '
+    return {'status': order['status'], 'guidance': order['guidance'],
+            'text': f'알레르기: {allergies}. 기타 섭취 제한: {other}. '
             f'선택 구성: {", ".join(labels)}. '
             f'확인 필요: {", ".join(unknown) or "추가 미확인 항목 없음"}. '
             + (f'제한 조건 관련 분석: {", ".join(ai_mentions)}. ' if ai_mentions else '') +
