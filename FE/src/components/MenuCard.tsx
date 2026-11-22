@@ -1,6 +1,5 @@
-"use client";
+import { Link } from "react-router-dom";
 
-import Link from "next/link";
 import { Bookmark } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDistance, formatPrice } from "@/lib/geo";
@@ -38,7 +37,7 @@ export function MenuCard({
   return (
     <div className="relative rounded-2xl border border-border bg-card p-4 shadow-[0_2px_8px_rgba(37,42,39,0.03)]">
       <Link
-        href={
+        to={
           variant === "saved" ? `/menu/${item.id}?from=my` : `/menu/${item.id}`
         }
         className="block pr-10"

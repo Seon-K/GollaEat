@@ -1,11 +1,8 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, useLocation } from "react-router-dom";
 import { Search, User } from "lucide-react";
 
 export function BottomNav() {
-  const pathname = usePathname();
+  const { pathname } = useLocation();
   const exploreActive = pathname.startsWith("/explore");
   const myActive = pathname === "/my" || pathname.startsWith("/mypage");
 
@@ -16,7 +13,7 @@ export function BottomNav() {
     >
       <div className="grid h-14 grid-cols-2">
         <Link
-          href="/explore"
+          to="/explore"
           aria-current={exploreActive ? "page" : undefined}
           className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium touch-target ${
             exploreActive ? "text-primary" : "text-muted"
@@ -26,7 +23,7 @@ export function BottomNav() {
           탐색
         </Link>
         <Link
-          href="/my"
+          to="/my"
           aria-current={myActive ? "page" : undefined}
           className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium touch-target ${
             myActive ? "text-primary" : "text-muted"

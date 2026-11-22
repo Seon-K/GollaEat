@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect } from "react";
 
 /** 화면 켜짐 유지 — Wake Lock API 지원 시에만 */

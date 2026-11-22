@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ensureSession } from "@/lib/api/client";
 import { getDataMode, getDataProvider } from "@/lib/api/providers";

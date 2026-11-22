@@ -1,5 +1,3 @@
-"use client";
-
 import { ApiError } from "@/lib/api/errors";
 
 export function ApiLoading({ label = "불러오는 중…" }: { label?: string }) {
