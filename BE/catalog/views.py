@@ -78,6 +78,7 @@ def menu_detail(request, menu_id):
         return JsonResponse(
             {'error': {'code': 'menu_not_found', 'message': 'menu not found'}}, status=404,
         )
+    result.setdefault('analysis_reference', None)
     return JsonResponse(result)
 
 

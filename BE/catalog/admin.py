@@ -3,7 +3,8 @@ from django.core.exceptions import ValidationError, PermissionDenied
 from django.utils import timezone
 
 from .models import (Restaurant, Menu, BusinessHours, Closure, OptionGroup, MenuComponent,
-                     CatalogSource, FoodDeclaration, InformationReport, AllergenLink, ReportEvent, GeocodeAttempt)
+                     CatalogSource, FoodDeclaration, InformationReport, AllergenLink, ReportEvent, GeocodeAttempt,
+                     MenuAnalysisReference)
 from .operations import apply_report, review_report
 
 
@@ -162,6 +163,23 @@ class GeocodeAttemptAdmin(admin.ModelAdmin):
                 apply_coordinates(attempt.pk, request.user)
             except (ValidationError, PermissionDenied) as exc:
                 self.message_user(request, f'좌표 변환 기록 {attempt.pk}: {exc}', level=messages.ERROR)
+
+
+@admin.register(MenuAnalysisReference)
+class AnalysisReferenceAdmin(admin.ModelAdmin):
+    list_display = ['menu', 'ingredient_source', 'evidence_level', 'gemini_status', 'imported_at']
+    list_filter = ['ingredient_source', 'evidence_level']
+    search_fields = ['menu__preprocess_row_id', 'menu__name', 'menu__restaurant__name']
+    readonly_fields = [field.name for field in MenuAnalysisReference._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(InformationReport)
