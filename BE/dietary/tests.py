@@ -16,6 +16,8 @@ class DietaryTests(TestCase):
         self.profile.criteria.add(Criterion.objects.get(code='allergen-milk'))
         self.catalog = patch('dietary.services.get_catalog').start().return_value
         self.addCleanup(patch.stopall)
+        # 성분 판정 단위 테스트와 주문 관계 검증의 경계 분리
+        patch('dietary.services.validate_selection', return_value={'status': 'valid', 'unknown_items': []}).start()
         self.data = {
             'yes': {'present_tags': ['milk'], 'absent_tags': [], 'sources': [{'id': 's1'}]},
             'no': {'present_tags': [], 'absent_tags': ['milk'], 'sources': [{'id': 's2'}]},

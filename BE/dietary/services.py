@@ -3,6 +3,7 @@ from .models import Criterion
 from .validation import identifiers, order_components
 from .messages import unknown_messages
 from .catalog_info import component_summaries
+from .order_validation import validate_selection
 
 PRIORITY = {'match': 0, 'needs_check': 1, 'mismatch': 2}
 
@@ -145,9 +146,13 @@ def rank_menus(profile, menu_ids, *, criteria=None):
 
 def check_order(profile, components, *, context=None):
     order_components(components)
+    selection = validate_selection(components)
     context = context if context is not None else EvaluationContext(profile)
     results = [dict(evaluate(profile, c['id'], c.get('modifications'), context=context), role=c['role']) for c in components]
-    return {'status': aggregate(results), 'components': results}
+    status = aggregate(results)
+    if status == 'match' and selection['status'] == 'needs_check':
+        status = 'needs_check'
+    return {'status': status, 'components': results, 'selection_validation': selection}
 
 
 def communication(profile, components):
@@ -158,6 +163,8 @@ def communication(profile, components):
     allergies = '、'.join(c.name for c in criteria if c.kind == 'allergen') or '등록 없음'
     other = '、'.join(c.name for c in criteria if c.kind != 'allergen') or '등록 없음'
     unknown = sorted({x for r in order['components'] for x in r['unknown_messages']})
+    if order['selection_validation']['status'] == 'needs_check':
+        unknown.append('주문 옵션 구성 및 선택 가능 여부 확인 필요')
     summaries = component_summaries([c['id'] for c in components])
     # 미조회 구성의 ID 유지 및 이름 미확인 표시
     labels = [summaries[c['id']]['name'] if c['id'] in summaries
