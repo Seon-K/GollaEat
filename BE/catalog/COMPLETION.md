@@ -8,6 +8,7 @@
 | 매장 분류·연락처·음식 종류 | Restaurant의 DB 필드 및 관리자 편집; 음식 종류 데이터 없는 매장은 빈 값 |
 | 미확인 처리 | 가격·좌표 null, 운영정보 unknown, 알레르기 needs_check, 판매 unverified |
 | 별도 알레르겐 매핑 | import_catalog_allergens: 명시적인 place_id-브랜드 연결과 메뉴명 정확 일치; 불확실한 결과는 참고 |
+| AI 분석 정보 | MenuAnalysisReference·import_menu_analysis·메뉴 상세 analysis_reference 구현; Qwen/Gemini/공공데이터를 미검증 참고로 구분, B 판정 경로와 분리 |
 | 성분 근거·확인 시점·범위 | CatalogSource와 FoodDeclaration.applicability_scope, 원문 AllergenLink.payload에 보존 |
 | 검증/참고/미확인 구분 | source 검증·기한 검사, link verified_source/reference/inactive, FoodDeclaration 검증 상태 |
 | 옵션 실제 적재 | 기본 CSV의 menu_option 원문은 DB에 보존; 구조화된 옵션·제약은 관리자 입력 가능, 자동 추정하지 않음 |
@@ -32,6 +33,9 @@
   실제 운영 배포는 수행하지 않는다. CI 결과는 해당 PR의 Checks에서 확인한다.
 
 ## 데이터 연동 확인 범위
+
+- PR #13 AI 분석 6,034개는 기존 메뉴의 보조 데이터로만 적재한다. 8,436개 메뉴를 교체하지 않는다.
+  분석 없는 2,402개 메뉴는 정상 조회되며 analysis_reference=null이다. 실제 Supabase 적재는 별도 승인 사항이다.
 
 - 정확 일치 연결 후보 715개 중 기존 검토 상태·공식 출처·메뉴 범위·출처 기준일을 충족한
   2개 메뉴의 포함 정보만 B 판정에 사용한다. 나머지 713개는 참고이며 기준을 완화하지 않는다.
