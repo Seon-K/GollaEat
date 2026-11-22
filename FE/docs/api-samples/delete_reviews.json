@@ -1,0 +1,14 @@
+{
+  "_meta": {
+    "method": "DELETE",
+    "path": "/api/reviews/2",
+    "status": 200,
+    "ok": true,
+    "expectError": false,
+    "note": null,
+    "savedAt": "2026-11-22T08:44:08.518Z"
+  },
+  "body": {
+    "deleted": true
+  }
+}

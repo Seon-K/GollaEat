@@ -1,0 +1,14 @@
+{
+  "_meta": {
+    "method": "POST",
+    "path": "/api/judgements",
+    "status": 400,
+    "ok": false,
+    "expectError": true,
+    "note": "empty body → expect 400",
+    "savedAt": "2026-11-22T08:44:35.028Z"
+  },
+  "body": {
+    "error": "'menu_id'"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "_meta": {
+    "method": "POST",
+    "path": "/api/favorites",
+    "status": 201,
+    "ok": true,
+    "expectError": false,
+    "note": null,
+    "savedAt": "2026-11-22T08:43:58.998Z"
+  },
+  "body": {
+    "id": 2,
+    "menu_id": "menus_008023"
+  }
+}

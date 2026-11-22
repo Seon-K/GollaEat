@@ -1,0 +1,43 @@
+"use client";
+
+import { ApiError } from "@/lib/api/errors";
+
+export function ApiLoading({ label = "불러오는 중…" }: { label?: string }) {
+  return (
+    <div className="space-y-3 py-2" aria-busy="true" aria-label={label}>
+      <div className="h-24 animate-pulse rounded-2xl bg-[#eef1ef]" />
+      <div className="h-24 animate-pulse rounded-2xl bg-[#eef1ef]" />
+      <div className="h-24 animate-pulse rounded-2xl bg-[#eef1ef]" />
+    </div>
+  );
+}
+
+export function ApiErrorPanel({
+  error,
+  onRetry,
+}: {
+  error: unknown;
+  onRetry?: () => void;
+}) {
+  const message =
+    error instanceof ApiError
+      ? error.message
+      : error instanceof Error
+        ? error.message
+        : "요청에 실패했습니다.";
+
+  return (
+    <div className="rounded-2xl border border-[#eef1ef] bg-card px-4 py-6 text-center">
+      <p className="text-[14px] text-muted">{message}</p>
+      {onRetry ? (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-4 inline-flex h-11 items-center rounded-full bg-primary-light px-5 text-[14px] font-semibold text-primary touch-target"
+        >
+          다시 시도
+        </button>
+      ) : null}
+    </div>
+  );
+}

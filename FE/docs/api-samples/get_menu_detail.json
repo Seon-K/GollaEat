@@ -1,0 +1,64 @@
+{
+  "_meta": {
+    "method": "GET",
+    "path": "/api/menus/menus_008023",
+    "status": 200,
+    "ok": true,
+    "expectError": false,
+    "note": "menu_id=menus_008023",
+    "savedAt": "2026-11-22T08:43:39.489Z"
+  },
+  "body": {
+    "brand": "",
+    "menu_id": "menus_008023",
+    "category": "카페",
+    "menu_name": "(6팩)버라이어티팩",
+    "price_raw": "28800.0",
+    "updated_at": "2026-10-23",
+    "description": "6가지 맛의 싱글레귤러 아이스크림을 하나로 포장해서 선물하세요!",
+    "menu_option": "",
+    "collected_at": "2026-10-23",
+    "price_amount": 28800,
+    "price_status": "fixed",
+    "restaurant_id": "1156290732",
+    "restaurant_name": "배스킨라빈스 아산신창",
+    "restaurant_type": "프랜차이즈",
+    "branch_sale_status": "unverified",
+    "source_price_status": "단일가격",
+    "latitude": 36.7908840061374,
+    "longitude": 126.955716574904,
+    "allergen_information": {
+      "allergens_contains_normalized": null,
+      "declarations": [],
+      "brand_reference": null
+    },
+    "analysis_reference": null,
+    "original_information": {
+      "description_raw": "6가지 맛의 싱글레귤러 아이스크림을 하나로 포장해서 선물하세요!"
+    },
+    "source": {
+      "source_url": null,
+      "collected_at": "2026-10-23"
+    },
+    "verification": {
+      "verification_status": "unmatched"
+    },
+    "safety_assessment": "not_determined",
+    "ingredients": [],
+    "components": [],
+    "option_groups": [],
+    "restaurant": {
+      "restaurant_id": "1156290732",
+      "restaurant_name": "배스킨라빈스 아산신창",
+      "latitude": 36.7908840061374,
+      "longitude": 126.955716574904
+    },
+    "price": {
+      "raw": "28800.0",
+      "amount": 28800,
+      "currency": "KRW",
+      "status": "fixed"
+    },
+    "distance_km": null
+  }
+}
