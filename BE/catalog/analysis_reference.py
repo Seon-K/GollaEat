@@ -94,7 +94,10 @@ def analysis_json(reference):
             'status': reference.public_reference_status},
         'restaurant_ingredient_verification': reference.restaurant_ingredient_verification,
         'allergy_safety_status': reference.allergy_safety_status,
-        'verification_status': 'unverified', 'usable_for_dietary_judgement': False,
+        'verification_status': 'unverified',
+        'usable_for_dietary_judgement': bool(reference.explicit_ingredients or reference.explicit_components
+                                            or reference.gemini_estimated_ingredients),
+        'judgement_usage': 'mismatch_only', 'usable_for_verified_absence': False,
         'source': {'filename': reference.source_filename, 'sha256': reference.source_sha256,
             'imported_at': reference.imported_at},
         'notice': '텍스트 추출·AI 추정·유사 음식 참고 정보이며 실제 매장 재료 및 알레르기 안전성을 확인한 정보가 아닙니다.',

@@ -261,7 +261,7 @@ class GeocodeAttempt(models.Model):
 
 
 class MenuAnalysisReference(models.Model):
-    """Unverified display information only; never a dietary declaration."""
+    """검증 성분 근거와 분리된 AI 분석 정보"""
     menu = models.OneToOneField(Menu, primary_key=True, on_delete=models.PROTECT, related_name='analysis_reference')
     explicit_ingredients = models.JSONField(default=list, blank=True)
     explicit_components = models.JSONField(default=list, blank=True)

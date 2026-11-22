@@ -4,6 +4,7 @@ from .validation import identifiers, order_components
 from .messages import unknown_messages
 from .catalog_info import component_summaries
 from .order_validation import validate_selection
+from .analysis_reference import ai_evidence
 
 PRIORITY = {'match': 0, 'needs_check': 1, 'mismatch': 2}
 
@@ -15,6 +16,7 @@ def validate_component(data):
     if not isinstance(data, dict):
         return None, True
     clean = {}
+    clean['analysis_reference'] = data.get('analysis_reference')
     invalid = False
     for field in ['present_tags', 'absent_tags']:
         value = data.get(field, [])
@@ -86,9 +88,12 @@ def evaluate(profile, component_id, modifications=None, *, criteria=None, contex
     data = (context.component_data[component_id] if component_id in context.component_data
             else get_catalog().get_component(component_id))
     data, invalid_data = validate_component(data)
+    inferred, invalid_analysis = ai_evidence((data or {}).get('analysis_reference'), component_id)
+    invalid_data = invalid_data or invalid_analysis
     reasons = []
     unknown = []
     problems = set()
+    relevant_ai = {}
     for criterion in criteria:
         if criterion.kind == 'preference':
             continue
@@ -98,7 +103,10 @@ def evaluate(profile, component_id, modifications=None, *, criteria=None, contex
         absent = set((data or {}).get('absent_tags', []))
         sources = (data or {}).get('sources', [])
         # 명시적 포함·불포함 비교, 누락 성분은 미확인 처리
-        hits = tags & present
+        verified_hits = tags & present
+        matches = [item for item in inferred if tags & set(item['matched_tags'])]
+        inferred_hits = tags & {tag for item in matches for tag in item['matched_tags']}
+        hits = verified_hits | inferred_hits
         missing = tags - present - absent
         if hits:
             status = 'mismatch'
@@ -115,7 +123,12 @@ def evaluate(profile, component_id, modifications=None, *, criteria=None, contex
         unknown.extend(f'{criterion.code}:{tag}' for tag in unverified)
         reasons.append({'condition': criterion.code, 'name': criterion.name, 'status': status,
                         'problem_ingredients': sorted(hits), 'unknown_items': unverified,
+                        'verified_problem_ingredients': sorted(verified_hits),
+                        'ai_problem_ingredients': sorted(inferred_hits),
+                        'ai_evidence': matches,
                         'rule_source': rule.source if rule else None, 'sources': sources})
+        for item in matches:
+            relevant_ai[(item['origin'], item['ingredient'])] = item
     if not data:
         unknown.append('component_data')
     if invalid_data:
@@ -132,6 +145,7 @@ def evaluate(profile, component_id, modifications=None, *, criteria=None, contex
     return {'component_id': component_id, 'status': status, 'reasons': reasons,
             'problem_ingredients': sorted(problems), 'unknown_items': sorted(set(unknown)),
             'unknown_messages': messages,
+            'ai_evidence': list(relevant_ai.values()),
             'sources': (data or {}).get('sources', []), 'preference_score': score,
             'sort_key': [PRIORITY[status], -score, component_id]}
 
@@ -163,6 +177,9 @@ def communication(profile, components):
     allergies = '、'.join(c.name for c in criteria if c.kind == 'allergen') or '등록 없음'
     other = '、'.join(c.name for c in criteria if c.kind != 'allergen') or '등록 없음'
     unknown = sorted({x for r in order['components'] for x in r['unknown_messages']})
+    ai_mentions = sorted({('메뉴 텍스트 추출' if item['origin'] == 'qwen' else 'AI 추정')
+                          + ': ' + item['ingredient'] + ' (실제 사용 여부 확인 필요)'
+                          for r in order['components'] for item in r.get('ai_evidence', [])})
     if order['selection_validation']['status'] == 'needs_check':
         unknown.append('주문 옵션 구성 및 선택 가능 여부 확인 필요')
     summaries = component_summaries([c['id'] for c in components])
@@ -174,6 +191,7 @@ def communication(profile, components):
     return {'status': order['status'], 'text': f'알레르기: {allergies}. 기타 섭취 제한: {other}. '
             f'선택 구성: {", ".join(labels)}. '
             f'확인 필요: {", ".join(unknown) or "추가 미확인 항목 없음"}. '
+            + (f'제한 조건 관련 분석: {", ".join(ai_mentions)}. ' if ai_mentions else '') +
             '혹시 주문하려는 메뉴에 위 재료들이 들어가는지 확인해 주실 수 있을까요? '
             '소스나 양념, 육수에 들어가는 재료도 함께 알려주시면 정말 감사하겠습니다.',
             'order': order}
