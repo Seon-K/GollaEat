@@ -44,6 +44,7 @@ exports[`adapters from api-samples > snapshot: judgement / menus / menu detail /
     "lng": 126.955716574904,
     "name": "(6팩)버라이어티팩",
     "optionGroups": [],
+    "phone": null,
     "priceAmount": 28800,
     "restaurantId": "1156290732",
     "restaurantName": "배스킨라빈스 아산신창",
@@ -56,24 +57,22 @@ exports[`adapters from api-samples > snapshot: judgement / menus / menu detail /
     "reasons": [
       {
         "conditionCode": "allergen-milk",
-        "detail": "milk · source",
+        "detail": "포함 정보 없음 · 재료 정보 확인",
         "label": "우유",
         "ruleSource": "GollaEat 성분 태그 계약 v1: milk",
         "status": "check",
         "unknownItems": [
-          "milk",
-          "source",
+          "우유",
         ],
       },
       {
         "conditionCode": "exclude-pork",
-        "detail": "pork · source",
+        "detail": "포함 정보 없음 · 재료 정보 확인",
         "label": "돼지고기",
         "ruleSource": "GollaEat 성분 태그 계약 v1: pork",
         "status": "check",
         "unknownItems": [
-          "pork",
-          "source",
+          "돼지고기",
         ],
       },
     ],
@@ -86,10 +85,8 @@ exports[`adapters from api-samples > snapshot: judgement / menus / menu detail /
     "sources": [],
     "status": "check",
     "unknownItems": [
-      "allergen-milk:milk",
-      "allergen-milk:source",
-      "exclude-pork:pork",
-      "exclude-pork:source",
+      "우유",
+      "돼지고기",
     ],
     "unknownMessages": [
       "우유 포함 여부 확인 필요",
@@ -112,24 +109,22 @@ exports[`adapters from api-samples > snapshot: judgement / menus / menu detail /
         "reasons": [
           {
             "conditionCode": "allergen-milk",
-            "detail": "milk · source",
+            "detail": "포함 정보 없음 · 재료 정보 확인",
             "label": "우유",
             "ruleSource": "GollaEat 성분 태그 계약 v1: milk",
             "status": "check",
             "unknownItems": [
-              "milk",
-              "source",
+              "우유",
             ],
           },
           {
             "conditionCode": "exclude-pork",
-            "detail": "pork · source",
+            "detail": "포함 정보 없음 · 재료 정보 확인",
             "label": "돼지고기",
             "ruleSource": "GollaEat 성분 태그 계약 v1: pork",
             "status": "check",
             "unknownItems": [
-              "pork",
-              "source",
+              "돼지고기",
             ],
           },
         ],
@@ -142,10 +137,8 @@ exports[`adapters from api-samples > snapshot: judgement / menus / menu detail /
         "sources": [],
         "status": "check",
         "unknownItems": [
-          "allergen-milk:milk",
-          "allergen-milk:source",
-          "exclude-pork:pork",
-          "exclude-pork:source",
+          "우유",
+          "돼지고기",
         ],
         "unknownMessages": [
           "우유 포함 여부 확인 필요",
@@ -154,6 +147,8 @@ exports[`adapters from api-samples > snapshot: judgement / menus / menu detail /
           "돼지고기 관련 정보 출처 확인 필요",
         ],
       },
+      "lat": 36.7908840061374,
+      "lng": 126.955716574904,
       "name": "(6팩)버라이어티팩",
       "priceAmount": 28800,
       "restaurantId": "1156290732",
@@ -173,24 +168,22 @@ exports[`adapters from api-samples > snapshot: judgement / menus / menu detail /
         "reasons": [
           {
             "conditionCode": "allergen-milk",
-            "detail": "milk · source",
+            "detail": "포함 정보 없음 · 재료 정보 확인",
             "label": "우유",
             "ruleSource": "GollaEat 성분 태그 계약 v1: milk",
             "status": "check",
             "unknownItems": [
-              "milk",
-              "source",
+              "우유",
             ],
           },
           {
             "conditionCode": "exclude-pork",
-            "detail": "pork · source",
+            "detail": "포함 정보 없음 · 재료 정보 확인",
             "label": "돼지고기",
             "ruleSource": "GollaEat 성분 태그 계약 v1: pork",
             "status": "check",
             "unknownItems": [
-              "pork",
-              "source",
+              "돼지고기",
             ],
           },
         ],
@@ -203,10 +196,8 @@ exports[`adapters from api-samples > snapshot: judgement / menus / menu detail /
         "sources": [],
         "status": "check",
         "unknownItems": [
-          "allergen-milk:milk",
-          "allergen-milk:source",
-          "exclude-pork:pork",
-          "exclude-pork:source",
+          "우유",
+          "돼지고기",
         ],
         "unknownMessages": [
           "우유 포함 여부 확인 필요",
@@ -215,6 +206,8 @@ exports[`adapters from api-samples > snapshot: judgement / menus / menu detail /
           "돼지고기 관련 정보 출처 확인 필요",
         ],
       },
+      "lat": 36.7908840061374,
+      "lng": 126.955716574904,
       "name": "(8팩) 버라이어티팩",
       "priceAmount": 38400,
       "restaurantId": "1156290732",

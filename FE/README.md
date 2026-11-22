@@ -15,6 +15,7 @@ npm run dev
 
 - 로컬: Vite가 `/api`를 `VITE_API_PROXY_TARGET`(기본 `http://127.0.0.1:8000`)으로 프록시
 - Mock UI: `VITE_DATA_MODE=mock`
+- 지도: `VITE_KAKAO_MAP_APP_KEY`(카카오맵 JS 키). Railway Variables에도 동일 키 등록, 카카오 콘솔에 배포 도메인 등록
 - 브라우저: [http://localhost:5173](http://localhost:5173)
 
 ```bash
@@ -26,7 +27,7 @@ npm run preview
 ## 배포 (Railway)
 
 - `Dockerfile` + `Caddyfile` + `railway.json`
-- Frontend Variables: `BACKEND_ORIGIN=https://${{Backend.RAILWAY_PUBLIC_DOMAIN}}` (경로·trailing `/` 없음)
+- Frontend Variables: `BACKEND_ORIGIN=https://${{Backend.RAILWAY_PUBLIC_DOMAIN}}` (경로·trailing `/` 없음), `VITE_KAKAO_MAP_APP_KEY=` (카카오맵 JS 키, 빌드 시 주입)
 - Caddy가 `/api`·`/admin`·`/static`을 백엔드로 전달하고 SPA는 `dist` 서빙
 - Health: `/healthz`
 

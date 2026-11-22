@@ -51,6 +51,13 @@ describe("adapters from api-samples", () => {
       conditionCode: "allergen-milk",
       status: "check",
     });
+    expect(ui.reasons[0].unknownItems).toEqual(["우유"]);
+    expect(ui.unknownItems).toEqual(
+      expect.arrayContaining(["우유", "돼지고기"]),
+    );
+    expect(ui.unknownItems).not.toEqual(
+      expect.arrayContaining([expect.stringMatching(/allergen-|:/)]),
+    );
     expect(ui.unknownMessages.length).toBeGreaterThan(0);
   });
 
