@@ -45,34 +45,49 @@ DB 외 모드나 미조회 구성은 status=needs_check이며 unknown_items에 �
 프로필 수정·삭제는 view_profile과 해당 작업 권한을 함께 요구한다.
 프로필 신규 생성은 비회원 세션 경로로 제한한다. 리뷰 공개 조건은 기존 읽기 전용이다.
 
-## AI 참고 근거 연동 준비 계약 v1
+## AI 분석 및 공식 프랜차이즈 판정 정책 v2
 
-AI 분석 DB 적재/API 연결은 A 담당 범위다. 현재 서비스 API에 참고 정보를 자동 추가하지 않는다.
-`dietary.analysis_reference.prepare_reference()`는 이후 사용할 선택적 정규화 경계이며 판정에 호출하지 않는다.
-다음은 기존 필드를 강제 변경하는 요구가 아닌 A 응답에 대한 **제안 계약**이다. 실제 응답 확정 시 어댑터에서 맞춘다.
+A의 실제 analysis_reference(qwen/gemini/public_reference) 형식을 사용한다.
+Gemini는 estimated_ingredients, 공공데이터는 문자열 allergens/status 등 기존 A 필드를 보존한다.
+기존 public_data 제안 계약은 사용하지 않는다.
 
-```json
-{
-  "analysis_reference": {
-    "qwen": {"ingredients": ["우유"], "components": [], "evidence_level": "DESCRIPTION_SUPPORTED"},
-    "gemini": {"ingredients": [], "status": "not_available"},
-    "public_data": {"food_code": "D001", "food_name": "참고 음식", "allergens": ["밀"], "verification_status": "UNVERIFIED_SIMILAR_FOOD"}
-  }
-}
-```
+판정 우선순위:
+1. 검증된 포함 정보 또는 Qwen 추출/Gemini 추정에 제한 성분이 연결되면 mismatch.
+2. 필요한 모든 제한 태그의 불포함과 출처가 확인되고 모순이 없으면 match.
+3. 불일치 근거는 없지만 정보가 부족하면 needs_check.
 
-CSV explicit_ingredients/explicit_components/evidence_level은 qwen,
-gemini_estimated_ingredients/gemini_status는 gemini,
-top1_fd_Code/public_reference_food_name/public_reference_allergens/public_reference_status는 public_data에 대응한다.
-공통 메뉴 ID는 기존 menu_id를 사용한다. 분석 미존재는 analysis_reference=null,
-채널 미존재는 해당 채널=null, 채널은 있으나 목록이 비어 있으면 빈 배열로 구분한다.
-공통 usage=reference_only, affects_judgement=false는 B 정규화 결과에서 강제한다.
-원본은 변경하지 않고 복사하며 Qwen 추출/Gemini 추정/일반 음식 참고를 합치지 않는다.
+AI는 불일치 선별에만 사용하며 빈 목록·미언급·처리 성공을 불포함으로 해석하지 않는다.
+public_reference의 일반 음식 알레르겐만으로는 mismatch/match를 만들지 않는다.
+Qwen ingredients/components 및 Gemini estimated_ingredients의 명시적 표현을 정규 태그와 연결한다.
+구성 음식 이름에 없는 숨은 레시피는 추정하지 않는다. 재료 사전은 dietary/ingredient_tags.py가 기준이다.
+동의어·명시적 복합 재료·상위 제한 그룹 연결을 사용하며 부정/대체 표현은 포함 단정에서 제외한다.
+새 모델 호출이나 외부 AI API 호출은 없다.
 
-검증된 reasons/sources와 AI 참고 내용은 별도 영역이다.
-참고 재료를 present_tags/absent_tags에 넣거나 match·mismatch 및 추천 점수를 자동 변경하지 않는다.
-향후 사용자 조건별 참고 안내에 연결할 때도 추정/참고 표시를 유지한다.
-실제 분석 데이터 연결 및 이 계약의 응답 필드 합의는 A의 analysis_reference 제공 시 진행한다.
+응답의 기존 sources는 검증 근거 전용이다. 별도 ai_evidence에 origin(qwen/gemini), field,
+원문 ingredient, matched_tags, component_id, verified=false 및 파일명·해시·적재 시점을 반환한다.
+조건별 reasons에는 verified_problem_ingredients, ai_problem_ingredients, ai_evidence를 추가한다.
+AI를 공식 포함으로 표현하지 않으며 FoodDeclaration/CatalogSource를 생성하거나 변경하지 않는다.
+A 분석 메타정보는 verification_status=unverified를 유지하고 judgement_usage=mismatch_only,
+usable_for_verified_absence=false로 구분한다. usable_for_dietary_judgement는 AI 재료/구성 정보 보유 시 true다.
+prepare_reference의 affects_judgement=true는 이 배제 정책의 허용 여부이며 결과의 적합 보장은 아니다.
+
+프랜차이즈 공식 정보는 AllergenLink.status=verified_source, 공식·유효 출처,
+검토 완료·메뉴 전체 범위(menu), 현재 브랜드·메뉴명 일치를 모두 요구한다.
+공식 메뉴별 알레르겐 목록을 서비스의 17개 알레르겐 범위에 대한 전체 목록으로 취급한다.
+등록된 명칭으로 구성된 비어 있지 않은 목록에서 빠진 지원 알레르겐은 불포함으로 비교한다.
+원문 누락·알 수 없는 명칭·부분 범위·미검증·출처 만료·메뉴/브랜드 변경은 이 예외를 적용하지 않는다.
+전체 재료 목록으로 확대하지 않으므로 fish/cheese-butter 등 별도 재료 조건이나 전체 식이 유형은
+공식 목록만으로 match가 보장되지 않는다. 공식 메뉴 목록은 기본 메뉴 구성을 다루며 선택 옵션은 별도 점검한다.
+명시적인 기본 구성품 포함 정보 또는 AI 결과와 충돌하면 mismatch가 우선한다.
+교차접촉 안전 인증이나 지점 판매 확인으로 확대하지 않는다.
+
+탐색(personalize=true 또는 sort=dietary), 별도 판정·정렬 API, 즐겨찾기·주문·안내는 같은 evaluate를 사용한다.
+메뉴 상세는 `/api/menus/{id}?personalize=true`로 judgement/saved를 함께 조회한다.
+기본 상세 응답은 개인 판정을 자동 추가하지 않는다. 잘못된 personalize 값은 400이다.
+AI 분석은 메뉴 단위이며 선택 옵션에 부모 메뉴 분석을 복사하지 않는다.
+단건·일괄 조회에 동일한 분석과 공식 근거를 전달하고 요청 간 캐시 없이 최신 데이터를 반영한다.
+직원 안내에는 원문 재료와 ‘메뉴 텍스트 추출’/‘AI 추정’, 실제 사용 여부 확인 요청을 포함한다.
+DB 모델 필드 변경·새 마이그레이션·운영 분석 데이터 수정은 없다.
 
 ## A ORM 메뉴 정보 연동
 
