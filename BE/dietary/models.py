@@ -42,6 +42,7 @@ class Profile(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     guest_id = models.UUIDField(unique=True, editable=False)
     criteria = models.ManyToManyField(Criterion, blank=True)
+    setup_completed = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
 class Favorite(models.Model):

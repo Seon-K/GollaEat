@@ -85,8 +85,10 @@ def profile(request):
                 raise ValueError('Unsupported criterion: ' + c.code)
         with transaction.atomic():
             p.criteria.set(selected)
+            p.setup_completed = True
             p.save()
-    return JsonResponse({'criteria': list(p.criteria.values_list('code', flat=True))})
+    return JsonResponse({'criteria': list(p.criteria.values_list('code', flat=True)),
+                         'setup_completed': p.setup_completed})
 
 
 @endpoint(['POST'])
