@@ -42,7 +42,7 @@ FE와 BE를 모두 실행하면 첫 화면에 API 연결 상태가 표시됩니�
 
 ## 환경변수
 
-`BE/.env.example`은 설정 예시이며 `.env` 파일을 자동으로 읽지는 않습니다.
+`BE/.env.example`은 설정 예시이며 Django는 `BE/.env`를 자동으로 읽습니다. 기존 프로세스 환경변수가 우선합니다.
 PowerShell의 `$env:DJANGO_DEBUG = 'false'`처럼 환경변수를 설정합니다.
 로컬 개발 기본값은 DEBUG 활성화입니다. 배포 시 `DJANGO_DEBUG=false`,
 별도의 `DJANGO_SECRET_KEY`, 서비스 도메인을 포함한 `DJANGO_ALLOWED_HOSTS`를 설정하세요.
@@ -60,7 +60,7 @@ PowerShell의 `$env:DJANGO_DEBUG = 'false'`처럼 환경변수를 설정합니�
 3. 주소의 비밀번호 placeholder를 실제 DB 비밀번호로 바꿉니다. 비밀번호의 특수문자는
    URL 인코딩합니다. API URL이나 anon/service-role 키가 아닌 PostgreSQL URI를 사용합니다.
 4. 접속 주소를 로컬 터미널 또는 배포 서버의 `DATABASE_URL` 환경변수에 등록합니다.
-   `.env`는 자동 로드하지 않으며, 접속 주소와 비밀번호를 Git에 올리지 않습니다.
+   로컬에서는 `BE/.env`도 자동 로드합니다. 접속 주소와 비밀번호를 Git에 올리지 않습니다.
 
 로컬에서 연결할 경우 PowerShell에서 실행합니다 (실제 URI로 교체):
 
@@ -131,7 +131,7 @@ Config File Path는 저장소 루트 기준입니다. Build/Start Command는 대
 
 ### 2. Backend 환경변수와 배포
 
-Backend의 Variables에 다음을 등록합니다. `.env` 파일은 자동으로 읽지 않습니다.
+Backend의 Variables에 다음을 등록합니다. 등록된 환경변수는 `BE/.env`보다 우선합니다.
 
 | 이름 | 값 |
 | --- | --- |
