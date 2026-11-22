@@ -3,7 +3,7 @@ import math
 
 from dietary.catalog import get_catalog
 from dietary.models import Criterion
-from dietary.services import evaluate, resolve_criteria
+from dietary.services import evaluate, resolve_criteria, EvaluationContext
 
 
 def criteria_codes(state):
@@ -39,6 +39,9 @@ class BackendSearch:
         resolve_criteria(self.profile, codes)
         if not codes:
             return {'question': '어떤 알레르기나 제한 재료를 적용할까요?'}
+        if state.get("intent") == "explain":
+            from .explanation import explain_menu
+            return explain_menu(self.profile, state, codes)
         radius = state.get('radius_m', 1000)
         if isinstance(radius, bool) or not isinstance(radius, (int, float)) or not math.isfinite(radius) or radius <= 0:
             raise ValueError('검색 반경은 양수여야 합니다.')
@@ -52,6 +55,8 @@ class BackendSearch:
         if 'question' in response:
             return response
         groups = {'matched': {}, 'needs_check': {}}
+        context = EvaluationContext(self.profile, codes)
+        context.prime([row['menu_id'] for row in response['menus']])
         seen = set()
         for row in response['menus']:
             distance = row['distance_m']
@@ -63,10 +68,12 @@ class BackendSearch:
             if identity in seen:
                 continue
             seen.add(identity)
-            judgement = evaluate(self.profile, row['menu_id'], criteria=codes)
+            judgement = evaluate(self.profile, row['menu_id'], context=context)
             if judgement['status'] == 'mismatch':
                 continue
             key = 'matched' if judgement['status'] == 'match' else 'needs_check'
+            if state.get('result_filter', 'all') not in ('all', key):
+                continue
             store = groups[key].setdefault(row['restaurant_id'], {
                 'restaurant_id': row['restaurant_id'], 'restaurant': row['restaurant_name'],
                 'distance_m': distance, 'menus': []})

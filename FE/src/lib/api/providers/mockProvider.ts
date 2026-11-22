@@ -203,6 +203,8 @@ export const mockProvider: DataProvider = {
         currency: "KRW",
         category: m.category,
         distanceKm: store ? distanceFrom(store, origin) : null,
+        lat: store?.lat ?? null,
+        lng: store?.lng ?? null,
         saved: mockFavorites.size
           ? [...mockFavorites.values()].includes(m.id)
           : false,
@@ -226,6 +228,7 @@ export const mockProvider: DataProvider = {
         distanceKm: null,
         lat: null,
         lng: null,
+        phone: null,
         allergenInformation: null,
         components: [],
         optionGroups: [],
@@ -241,6 +244,7 @@ export const mockProvider: DataProvider = {
       distanceKm: null,
       lat: store?.lat ?? null,
       lng: store?.lng ?? null,
+      phone: null,
       allergenInformation: { confirmedAllergens: m.confirmedAllergens },
       components: [],
       optionGroups: [],

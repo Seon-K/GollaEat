@@ -149,12 +149,12 @@ export default function AiPage() {
     locationOverride?: { lat: number; lng: number } | null,
   ) => {
     const trimmed = text.trim();
-    if (!trimmed || sending) return;
+    if ((!trimmed && !locationOverride) || sending) return;
     setSending(true);
     setInput("");
     setMessages((prev) => [
       ...prev,
-      { id: `u-${Date.now()}`, role: "user", text: trimmed },
+      { id: `u-${Date.now()}`, role: "user", text: trimmed || "이 위치에서 검색해 주세요." },
     ]);
     const location =
       locationOverride ??
@@ -212,21 +212,7 @@ export default function AiPage() {
   };
 
   const selectPlace = (candidate: ChatPlaceCandidateUi) => {
-    // 후보 좌표를 location 으로 고정. 메시지에 직전 menu 힌트가 있으면 함께 보낸다.
-    let menuHint: string | undefined;
-    for (let i = messages.length - 1; i >= 0; i -= 1) {
-      const m = messages[i];
-      if (m.role !== "assistant") continue;
-      const menu = m.result.state?.menu;
-      if (typeof menu === "string" && menu.trim()) {
-        menuHint = menu.trim();
-        break;
-      }
-    }
-    const followUp = menuHint
-      ? `${candidate.name} 근처 ${menuHint}`
-      : `${candidate.name} 근처`;
-    void send(followUp, candidate.location);
+    void send("", candidate.location);
   };
 
   return (

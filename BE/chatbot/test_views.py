@@ -32,3 +32,25 @@ class ChatApiTests(TestCase):
         self.assertEqual(self.send(Client(), {'message': ''}).status_code, 400)
         self.assertEqual(self.send(Client(), {'new_conversation': 'yes'}).status_code, 400)
         self.assertEqual(self.send(Client(enforce_csrf_checks=True), {'message': '질문'}).status_code, 403)
+
+    @patch('chatbot.views.BackendSearch.__call__')
+    @patch('chatbot.views.parse_gemini')
+    def test_selected_location_skips_interpretation_and_returns_results(self, parse, search):
+        search.return_value = {'matched': [], 'needs_check': [], 'criteria': []}
+        parse.return_value = {'answer': '검색 결과가 없어요.'}
+        response = self.send(Client(), {'location': {'lat': 36.77, 'lng': 126.93}})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(search.call_args.args[0]['location']['lat'], 36.77)
+        self.assertIn('response_data', parse.call_args.kwargs)
+        self.assertEqual(parse.call_count, 1)
+
+    @patch('chatbot.views.parse_gemini')
+    def test_recent_history_is_passed_to_model(self, parse):
+        parse.return_value = {'question': '어느 장소인가요?'}
+        client = Client()
+        self.send(client, {'message': '점심 찾아줘'})
+        self.send(client, {'message': '순천향대'})
+        context = parse.call_args.kwargs['context']
+        self.assertEqual(context['history'][0]['user'], '점심 찾아줘')
+        self.send(client, {'new_conversation': True})
+        self.assertEqual(client.session['chat_history'], [])
