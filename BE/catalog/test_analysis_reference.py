@@ -64,7 +64,9 @@ class AnalysisReferenceTests(TestCase):
         self.assertEqual(analysis['gemini']['estimated_ingredients'], ['우유'])
         self.assertEqual(analysis['qwen']['components'], ['세트'])
         self.assertEqual(analysis['public_reference']['allergens'], '우유 | 밀')
-        self.assertFalse(analysis['usable_for_dietary_judgement'])
+        self.assertTrue(analysis['usable_for_dietary_judgement'])
+        self.assertEqual(analysis['judgement_usage'], 'mismatch_only')
+        self.assertFalse(analysis['usable_for_verified_absence'])
         self.assertEqual(analysis['source']['filename'], 'menugen_backend_final.csv')
         self.assertEqual(len(analysis['source']['sha256']), 64)
         self.assertIsNone(self.client.get('/api/menus/' + self.other.pk).json()['analysis_reference'])
@@ -117,7 +119,7 @@ class AnalysisReferenceTests(TestCase):
             self.run_import()
         self.assertFalse(MenuAnalysisReference.objects.exists())
 
-    def test_ai_does_not_affect_b_chatbot_favorites_or_staff_information(self):
+    def test_ai_changes_exclusion_without_creating_verified_declarations(self):
         client = Client(enforce_csrf_checks=True)
         token = client.get('/api/session').json()['csrf_token']
         def send(path, data, method='post'):
@@ -133,13 +135,18 @@ class AnalysisReferenceTests(TestCase):
         summaries = component_summaries([self.menu.pk])
         chatbot = BackendSearch(profile)(dict(state))
         self.run_import()
-        self.assertEqual(get_catalog().get_component(self.menu.pk), before)
-        self.assertEqual(client.get('/api/favorites').json(), favorites)
+        after = get_catalog().get_component(self.menu.pk)
+        self.assertEqual({k: v for k, v in after.items() if k != 'analysis_reference'},
+                         {k: v for k, v in before.items() if k != 'analysis_reference'})
+        self.assertEqual(favorites['favorites'][0]['judgement']['status'], 'needs_check')
+        self.assertEqual(client.get('/api/favorites').json()['favorites'][0]['judgement']['status'], 'mismatch')
         self.assertEqual(component_summaries([self.menu.pk]), summaries)
-        self.assertEqual(BackendSearch(profile)(dict(state)), chatbot)
-        self.assertEqual(send('/api/judgements', {'menu_id': self.menu.pk})['status'], 'needs_check')
-        self.assertEqual(send('/api/recommendations/rank', {'menu_ids': [self.menu.pk]})['results'][0]['status'], 'needs_check')
-        self.assertEqual(send('/api/orders/check', {'components': [{'id': self.menu.pk, 'role': 'menu'}]})['status'], 'needs_check')
+        self.assertTrue(chatbot['needs_check'])
+        remaining = BackendSearch(profile)(dict(state))['needs_check']
+        self.assertNotIn(self.menu.pk, [m['menu_id'] for store in remaining for m in store['menus']])
+        self.assertEqual(send('/api/judgements', {'menu_id': self.menu.pk})['status'], 'mismatch')
+        self.assertEqual(send('/api/recommendations/rank', {'menu_ids': [self.menu.pk]})['results'][0]['status'], 'mismatch')
+        self.assertEqual(send('/api/orders/check', {'components': [{'id': self.menu.pk, 'role': 'menu'}]})['status'], 'mismatch')
         self.assertFalse(FoodDeclaration.objects.exists())
         self.assertFalse(CatalogSource.objects.exists())
         source = CatalogSource.objects.create(title='확인된 성분', source_type='store',
@@ -148,5 +155,8 @@ class AnalysisReferenceTests(TestCase):
             presence='present', verification_status='verified', source=source, confirmed_at=source.checked_at)
         verified = get_catalog().get_component(self.menu.pk)
         self.run_import()
-        self.assertEqual(get_catalog().get_component(self.menu.pk), verified)
+        refreshed = get_catalog().get_component(self.menu.pk)
+        self.assertEqual(refreshed['present_tags'], verified['present_tags'])
+        self.assertEqual(refreshed['absent_tags'], verified['absent_tags'])
+        self.assertEqual(refreshed['sources'], verified['sources'])
         self.assertEqual(send('/api/judgements', {'menu_id': self.menu.pk})['status'], 'mismatch')

@@ -183,13 +183,14 @@ class WorkflowTests(TestCase):
                 self.assertEqual(evaluate(self.profile, 'a')['status'], 'needs_check')
                 declaration.delete()
 
-    def test_ai_reference_preparation_does_not_change_judgement(self):
-        reference = {'qwen': {'ingredients': ['우유']}, 'gemini': {'ingredients': ['달걀']},
-                     'public_data': {'allergens': ['밀']}, 'affects_judgement': True}
+    def test_ai_reference_normalization_preserves_a_fields(self):
+        reference = {'qwen': {'ingredients': ['우유']}, 'gemini': {'estimated_ingredients': ['달걀']},
+                     'public_reference': {'allergens': '밀'}, 'affects_judgement': False}
         before = evaluate(self.profile, 'a')
         original = deepcopy(reference)
         prepared = prepare_reference(reference)
-        self.assertFalse(prepared['affects_judgement'])
+        self.assertTrue(prepared['affects_judgement'])
+        self.assertEqual(prepared['public_reference']['allergens'], '밀')
         self.assertEqual(reference, original)
         prepared['qwen']['ingredients'].append('콩')
         self.assertEqual(reference, original)

@@ -91,7 +91,9 @@ API 호출·실제 도보거리·소요시간 계산은 하지 않는다.
     "restaurant_ingredient_verification": "NOT_VERIFIED",
     "allergy_safety_status": "UNKNOWN_NOT_VERIFIED",
     "verification_status": "unverified",
-    "usable_for_dietary_judgement": false,
+    "usable_for_dietary_judgement": true,
+    "judgement_usage": "mismatch_only",
+    "usable_for_verified_absence": false,
     "source": {"filename": "menugen_backend_final.csv", "sha256": "파일 SHA-256", "imported_at": "적재 시각"},
     "notice": "텍스트 추출·AI 추정·유사 음식 참고 정보이며 실제 매장 재료 및 알레르기 안전성을 확인한 정보가 아닙니다."
   }
@@ -250,7 +252,7 @@ python manage.py import_catalog_allergens --allergens /external/allergy_clean.cs
 맘스터치·프랭크버거 출처에 한정한다. 그 외는 `reference`다. 이는 브랜드 공개 자료의 포함 근거이며,
 현 지점 판매·레시피 변경·교차접촉을 확인했다는 의미가 아니다. `absent_tags`는 생성하지 않는다.
 상세의 `allergen_information.brand_reference`에는 원문·외부 ID·매칭 방식·검증 상태·출처가 반환된다.
-참고 정보의 태그가 있어도 B 판정에는 사용하지 않는다. 미확인 조건은 needs_check,
+Qwen·Gemini 재료 정보는 B의 불일치 선별에 사용하며 검증 근거나 불포함으로 승격하지 않는다. 공공데이터 유사 음식은 참고로만 유지한다. 미확인 조건은 needs_check,
 확인된 제한 성분 포함은 기존 B 규칙대로 mismatch다.
 
 재실행 시 기존 자동 연결을 재검토해 새 입력에서 제외되거나 모호해진 매핑은 inactive,
@@ -299,3 +301,11 @@ category 생략·빈 값은 전체 조회, 반복 값은 중복 제거, 앞뒤 �
 카테고리 목록은 필터 선택지이며 음식 선호 또는 알레르겐 판정 기준이 아니다.
 메뉴 category를 필터링하며 별도 필드인 restaurant_type 또는 매장 category는 변경하지 않는다.
 응답의 기존 results/pagination 형식은 유지하며 추가 DB 마이그레이션은 없다.
+
+## AI 판정 및 공식 알레르겐 정책 변경
+
+B의 판정은 Qwen 추출·Gemini 추정의 제한 성분 일치 시 mismatch를 반환한다.
+AI 출처는 ai_evidence에서 확인하며 검증 sources와 분리한다.
+공식 프랜차이즈 메뉴 전체 알레르겐 목록의 조건·출처가 유효하면 미표시 알레르겐에 대해 match가 가능하다.
+자세한 범위와 우선순위는 dietary/README.md의 정책 v2를 따른다.
+메뉴 상세에 personalize=true를 지정하면 공통 judgement와 saved를 추가한다.

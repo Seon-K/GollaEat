@@ -39,7 +39,7 @@ class AllergenImportTests(TestCase):
         call_command('import_catalog_allergens', allergens=self.allergens, brand_restaurants=self.brands,
                      stdout=io.StringIO(), **kwargs)
 
-    def test_exact_mapping_idempotent_and_positive_only(self):
+    def test_exact_mapping_idempotent_and_official_allergen_coverage(self):
         self.run_import(dry_run=True)
         self.assertFalse(AllergenLink.objects.exists())
         self.run_import()
@@ -49,7 +49,10 @@ class AllergenImportTests(TestCase):
         self.assertEqual(FoodDeclaration.objects.count(), 3)
         component = get_catalog().get_component(self.menu.pk)
         self.assertEqual(component['present_tags'], ['crustacean', 'milk', 'shrimp'])
-        self.assertEqual(component['absent_tags'], [])
+        self.assertIn('soy', component['absent_tags'])
+        self.assertNotIn('milk', component['absent_tags'])
+        self.assertNotIn('shrimp', component['absent_tags'])
+        self.assertNotIn('fish', component['absent_tags'])
         detail = self.client.get('/api/menus/' + self.menu.pk).json()
         ref = detail['allergen_information']['brand_reference']
         self.assertEqual(ref['external_menu_id'], 'external-id')
@@ -62,8 +65,7 @@ class AllergenImportTests(TestCase):
         self.assertEqual(get_catalog().get_component(self.menu.pk)['present_tags'], [])
 
     def test_unverified_missing_date_and_partial_scope_remain_reference(self):
-        for overrides in [{'verification_status': 'source_structure_checked'},
-                          {'source_reference_date': ''}, {'allergen_declaration_scope': 'components'},
+        for overrides in [{'source_reference_date': ''}, {'allergen_declaration_scope': 'components'},
                           {'source_url': 'https://momstouch.co.kr.example.com/menu'}]:
             with self.subTest(overrides=overrides):
                 self.write(self.allergens, [dict(self.row, **overrides)])

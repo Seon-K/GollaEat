@@ -84,6 +84,10 @@ def menus(request):
 def menu_detail(request, menu_id):
     if request.method != 'GET':
         return _method_not_allowed()
+    personalize = request.GET.get('personalize', 'false')
+    if personalize not in {'true', 'false'}:
+        return JsonResponse({'error': {'code': 'invalid_query_parameter', 'parameter': 'personalize',
+                                      'message': 'personalize must be true or false'}}, status=400)
     try:
         result = serialize_menu_detail(_csv_repository().get_menu(menu_id))
     except CatalogDataError as exc:
@@ -93,6 +97,8 @@ def menu_detail(request, menu_id):
             {'error': {'code': 'menu_not_found', 'message': 'menu not found'}}, status=404,
         )
     result.setdefault('analysis_reference', None)
+    if personalize == 'true':
+        _personalized(request, {'results': [result]})
     return JsonResponse(result)
 
 
