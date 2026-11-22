@@ -8,14 +8,12 @@ import { BottomSheet } from "@/components/BottomSheet";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Toast } from "@/components/Toast";
-import { allergenLabel } from "@/data/allergens";
-import { restrictionLabel } from "@/data/restrictions";
 import { apiKeys } from "@/lib/api/keys";
 import { getDataProvider } from "@/lib/api/providers";
+import { buildInquiryMessage } from "@/lib/inquiry";
 import { navigateBack } from "@/lib/navBack";
+import { uniqueAvoidLabels } from "@/lib/profileLabels";
 import { useProfileStore } from "@/store/profileStore";
-
-const MOCK_TEL = "041-000-0000";
 
 export default function MenuInquiryPage() {
   const params = useParams();
@@ -36,13 +34,7 @@ export default function MenuInquiryPage() {
     queryFn: () => getDataProvider().postJudgement(id),
   });
 
-  const communicationQuery = useQuery({
-    queryKey: [...apiKeys.all, "communication", id],
-    queryFn: () =>
-      getDataProvider().postCommunication([{ id, role: "menu" }]),
-  });
-
-  if (menuQuery.isLoading || judgementQuery.isLoading || communicationQuery.isLoading) {
+  if (menuQuery.isLoading || judgementQuery.isLoading) {
     return (
       <main className="min-h-[100dvh] bg-background px-5 pt-6">
         <ApiLoading />
@@ -53,23 +45,16 @@ export default function MenuInquiryPage() {
   if (
     menuQuery.isError ||
     judgementQuery.isError ||
-    communicationQuery.isError ||
     !menuQuery.data ||
-    !judgementQuery.data ||
-    !communicationQuery.data
+    !judgementQuery.data
   ) {
     return (
       <main className="p-6">
         <ApiErrorPanel
-          error={
-            menuQuery.error ??
-            judgementQuery.error ??
-            communicationQuery.error
-          }
+          error={menuQuery.error ?? judgementQuery.error}
           onRetry={() => {
             void menuQuery.refetch();
             void judgementQuery.refetch();
-            void communicationQuery.refetch();
           }}
         />
       </main>
@@ -78,7 +63,14 @@ export default function MenuInquiryPage() {
 
   const menu = menuQuery.data;
   const judgement = judgementQuery.data;
-  const message = communicationQuery.data.text;
+  const avoidLabels = uniqueAvoidLabels(allergens, restrictions);
+  const message = buildInquiryMessage({
+    storeName: menu.restaurantName,
+    menuName: menu.name,
+    allergens,
+    restrictions,
+  });
+  const phone = menu.phone?.trim() || null;
 
   const copyMessage = async () => {
     try {
@@ -116,23 +108,15 @@ export default function MenuInquiryPage() {
         <section className="rounded-2xl bg-primary-light p-4">
           <p className="text-[14px] font-bold text-primary">내가 피해야 할 성분</p>
           <div className="mt-3 flex flex-wrap gap-2">
-            {allergens.map((a) => (
+            {avoidLabels.map((label) => (
               <span
-                key={a}
+                key={label}
                 className="inline-flex items-center rounded-full bg-card px-3 py-1.5 text-[13px] font-medium text-primary"
               >
-                {allergenLabel(a)}
+                {label}
               </span>
             ))}
-            {restrictions.map((r) => (
-              <span
-                key={r}
-                className="inline-flex items-center rounded-full bg-card px-3 py-1.5 text-[13px] font-medium text-primary"
-              >
-                {restrictionLabel(r)}
-              </span>
-            ))}
-            {allergens.length === 0 && restrictions.length === 0 ? (
+            {avoidLabels.length === 0 ? (
               <span className="text-[13px] text-muted">선택한 항목 없음</span>
             ) : null}
           </div>
@@ -184,20 +168,26 @@ export default function MenuInquiryPage() {
           있어요.
         </p>
         <div className="mt-4 space-y-2 pb-2">
-          <a
-            href={`tel:${MOCK_TEL.replace(/-/g, "")}`}
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-[28px] bg-primary text-[15px] font-semibold text-white"
-          >
-            <Phone className="size-4" />
-            전화 걸기 ({MOCK_TEL})
-          </a>
+          {phone ? (
+            <a
+              href={`tel:${phone.replace(/[^\d+]/g, "")}`}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-[28px] bg-primary text-[15px] font-semibold text-white"
+            >
+              <Phone className="size-4" />
+              전화 걸기 ({phone})
+            </a>
+          ) : null}
           <button
             type="button"
             onClick={() => {
               setSheetOpen(false);
               navigate(`/show-staff?menuId=${menu.id}`);
             }}
-            className="flex h-12 w-full items-center justify-center rounded-[28px] bg-primary-light text-[15px] font-semibold text-primary"
+            className={`flex h-12 w-full items-center justify-center rounded-[28px] text-[15px] font-semibold ${
+              phone
+                ? "bg-primary-light text-primary"
+                : "bg-primary text-white"
+            }`}
           >
             직원에게 보여주기
           </button>

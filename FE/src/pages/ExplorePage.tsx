@@ -88,6 +88,25 @@ export default function ExplorePage() {
       ? "추천순"
       : (SORT_OPTIONS.find((o) => o.id === sort)?.label ?? "추천순");
 
+  const mapMarkers = useMemo(() => {
+    const seen = new Set<string>();
+    const markers: { id: string; name: string; lat: number; lng: number }[] =
+      [];
+    for (const m of menusQuery.data?.items ?? []) {
+      if (typeof m.lat !== "number" || typeof m.lng !== "number") continue;
+      const key = m.restaurantId || `${m.lat},${m.lng}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      markers.push({
+        id: key,
+        name: m.restaurantName || "매장",
+        lat: m.lat,
+        lng: m.lng,
+      });
+    }
+    return markers;
+  }, [menusQuery.data?.items]);
+
   const cards: MenuCardModel[] = useMemo(() => {
     let list = [...(menusQuery.data?.items ?? [])];
     if (filter !== "all") {
@@ -157,7 +176,7 @@ export default function ExplorePage() {
 
         <section className="mt-6">
           <h2 className="mb-3 text-[16px] font-bold text-text">주변 매장 지도</h2>
-          <NearbyMap />
+          <NearbyMap markers={mapMarkers} center={ASAN_ORIGIN} />
         </section>
 
         <section className="mt-6">

@@ -179,10 +179,14 @@ function MenuDetailContent() {
               미확인: {unknownBits.join(" · ")}
             </p>
           ) : null}
-          {judgement.unknownMessages[0] ? (
-            <p className="mt-2 text-[13px] text-muted">
-              {judgement.unknownMessages[0]}
-            </p>
+          {judgement.unknownMessages.length > 0 ? (
+            <ul className="mt-2 space-y-1">
+              {judgement.unknownMessages.slice(0, 3).map((msg) => (
+                <li key={msg} className="text-[13px] text-muted">
+                  {msg}
+                </li>
+              ))}
+            </ul>
           ) : null}
           <Link
             to={`/menu/${menu.id}/reasoning`}
@@ -209,10 +213,11 @@ function MenuDetailContent() {
 
         <section>
           <h2 className="mb-3 text-[15px] font-bold text-text">매장 위치</h2>
-          <StoreMap storeName={menu.restaurantName} />
-          <p className="mt-2 text-[12px] text-muted">
-            예시 지도 · 실제 위치는 지도 앱에서 확인
-          </p>
+          <StoreMap
+            storeName={menu.restaurantName}
+            lat={menu.lat}
+            lng={menu.lng}
+          />
           <a
             href={mapUrl}
             target="_blank"

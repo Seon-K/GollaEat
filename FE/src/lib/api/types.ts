@@ -66,6 +66,7 @@ export interface ApiRestaurantRef {
   restaurant_name: string;
   latitude?: number;
   longitude?: number;
+  phone?: string;
 }
 
 /**

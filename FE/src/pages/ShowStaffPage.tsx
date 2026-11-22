@@ -1,15 +1,10 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
-import { ApiErrorPanel, ApiLoading } from "@/components/ApiState";
-import { allergenLabel } from "@/data/allergens";
-import { restrictionLabel } from "@/data/restrictions";
 import { useWakeLock } from "@/hooks/useWakeLock";
-import { apiKeys } from "@/lib/api/keys";
-import { getDataProvider } from "@/lib/api/providers";
 import { joinWithDot } from "@/lib/inquiry";
 import { navigateBack } from "@/lib/navBack";
+import { staffSectionLabels } from "@/lib/profileLabels";
 import { useProfileStore } from "@/store/profileStore";
 
 function ShowStaffContent() {
@@ -21,21 +16,12 @@ function ShowStaffContent() {
 
   useWakeLock(true);
 
-  const communicationQuery = useQuery({
-    queryKey: [...apiKeys.all, "communication", menuId ?? "profile"],
-    queryFn: () =>
-      menuId
-        ? getDataProvider().postCommunication([{ id: menuId, role: "menu" }])
-        : Promise.resolve({
-            status: "check" as const,
-            text: "",
-            orderStatus: "check" as const,
-          }),
-    enabled: Boolean(menuId),
-  });
-
-  const allergenText = joinWithDot(allergens.map(allergenLabel));
-  const restrictionText = joinWithDot(restrictions.map(restrictionLabel));
+  const { allergenLabels, restrictionLabels } = staffSectionLabels(
+    allergens,
+    restrictions,
+  );
+  const allergenText = joinWithDot(allergenLabels);
+  const restrictionText = joinWithDot(restrictionLabels);
 
   return (
     <main className="flex min-h-[100dvh] flex-col bg-primary-dark px-5 pb-8 pt-4 text-white">
@@ -83,37 +69,16 @@ function ShowStaffContent() {
           <p className="mt-5 text-[12px] text-white/60">현재 식이 프로필 기준</p>
         </div>
 
-        {menuId && communicationQuery.isLoading ? (
-          <div className="mt-6 text-white/80">
-            <ApiLoading />
-          </div>
-        ) : null}
-        {menuId && communicationQuery.isError ? (
-          <div className="mt-6">
-            <ApiErrorPanel
-              error={communicationQuery.error}
-              onRetry={() => void communicationQuery.refetch()}
-            />
-          </div>
-        ) : null}
-        {communicationQuery.data?.text ? (
-          <p className="mt-6 text-[15px] leading-relaxed text-white/90">
-            {communicationQuery.data.text}
-          </p>
-        ) : (
-          <>
-            <p className="mt-6 text-[15px] leading-relaxed text-white/90">
-              혹시 주문하려는 메뉴에 위 재료들이
-              <br />
-              들어가는지 확인해 주실 수 있을까요?
-            </p>
-            <p className="mt-4 text-[15px] leading-relaxed text-white/90">
-              소스나 양념, 육수에 들어가는 재료도
-              <br />
-              함께 알려주시면 정말 감사하겠습니다.
-            </p>
-          </>
-        )}
+        <p className="mt-6 text-[15px] leading-relaxed text-white/90">
+          혹시 주문하려는 메뉴에 위 재료들이
+          <br />
+          들어가는지 확인해 주실 수 있을까요?
+        </p>
+        <p className="mt-4 text-[15px] leading-relaxed text-white/90">
+          소스나 양념, 육수에 들어가는 재료도
+          <br />
+          함께 알려주시면 정말 감사하겠습니다.
+        </p>
         <p className="mt-5 text-[16px] font-bold text-white">
           확인해 주셔서 감사합니다.
         </p>
@@ -125,6 +90,5 @@ function ShowStaffContent() {
     </main>
   );
 }
-
 
 export default ShowStaffContent;

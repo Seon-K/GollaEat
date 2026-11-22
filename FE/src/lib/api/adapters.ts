@@ -13,6 +13,7 @@ import type {
   ServerJudgementStatus,
   UiJudgementStatus,
 } from "@/lib/api/types";
+import { humanizeUnknownItems } from "@/lib/unknownItems";
 
 export function mapServerStatus(
   status: ServerJudgementStatus | null | undefined,
@@ -79,12 +80,13 @@ export interface ReasoningRowUi {
 }
 
 function detailFromReason(reason: ApiJudgementReason): string {
-  if (reason.unknown_items?.length) {
-    return reason.unknown_items.join(" · ");
-  }
+  const status = mapServerStatus(reason.status);
+  // p12 디자인 카피 — 원문 태그(milk·source)는 노출하지 않음
+  if (status === "check") return "포함 정보 없음 · 재료 정보 확인";
+  if (status === "match") return "사용하지 않는 것으로 확인";
+  if (status === "mismatch") return "포함 확인됨";
   if (reason.rule_source) return reason.rule_source;
-  // TODO(sample): match/mismatch 시 problem_ingredients / sources 비어 있지 않은 형태
-  return String(reason.status ?? "");
+  return "";
 }
 
 export function adaptReasoningRows(judgement: ApiJudgement): ReasoningRowUi[] {
@@ -94,7 +96,9 @@ export function adaptReasoningRows(judgement: ApiJudgement): ReasoningRowUi[] {
     conditionCode: r.condition,
     status: mapServerStatus(r.status),
     detail: detailFromReason(r),
-    unknownItems: Array.isArray(r.unknown_items) ? r.unknown_items : [],
+    unknownItems: humanizeUnknownItems(
+      Array.isArray(r.unknown_items) ? r.unknown_items : [],
+    ),
     ruleSource: r.rule_source ?? "",
   }));
 }
@@ -121,7 +125,9 @@ export function adaptJudgement(raw: ApiJudgement): JudgementUi {
     problemIngredients: Array.isArray(raw.problem_ingredients)
       ? raw.problem_ingredients
       : [],
-    unknownItems: Array.isArray(raw.unknown_items) ? raw.unknown_items : [],
+    unknownItems: humanizeUnknownItems(
+      Array.isArray(raw.unknown_items) ? raw.unknown_items : [],
+    ),
     unknownMessages: Array.isArray(raw.unknown_messages)
       ? raw.unknown_messages
       : [],
@@ -188,11 +194,18 @@ export interface MenuListItemUi {
   currency: string;
   category: string;
   distanceKm: number | null;
+  /** 매장 좌표 — 지도 마커용 (없으면 null) */
+  lat: number | null;
+  lng: number | null;
   saved: boolean;
   judgement: JudgementUi | null;
 }
 
 export function adaptMenuListItem(m: ApiMenuListItem): MenuListItemUi {
+  const lat =
+    typeof m.restaurant?.latitude === "number" ? m.restaurant.latitude : null;
+  const lng =
+    typeof m.restaurant?.longitude === "number" ? m.restaurant.longitude : null;
   return {
     id: m.menu_id,
     name: m.menu_name,
@@ -202,6 +215,8 @@ export function adaptMenuListItem(m: ApiMenuListItem): MenuListItemUi {
     currency: m.price?.currency ?? "KRW",
     category: m.category ?? "",
     distanceKm: m.distance_km ?? null,
+    lat,
+    lng,
     saved: Boolean(m.saved),
     judgement: m.judgement ? adaptJudgement(m.judgement) : null,
   };
@@ -217,6 +232,7 @@ export interface MenuDetailUi {
   distanceKm: number | null;
   lat: number | null;
   lng: number | null;
+  phone: string | null;
   allergenInformation: unknown;
   /**
    * analysis_reference 는 의도적으로 제외 (미검증, 판정 사용 금지)
@@ -255,8 +271,24 @@ export function adaptMenuDetail(m: ApiMenuDetail): MenuDetailUi {
     priceAmount: m.price?.amount ?? m.price_amount ?? 0,
     category: typeof m.category === "string" ? m.category : "",
     distanceKm: m.distance_km ?? null,
-    lat: typeof m.latitude === "number" ? m.latitude : null,
-    lng: typeof m.longitude === "number" ? m.longitude : null,
+    lat:
+      typeof m.latitude === "number"
+        ? m.latitude
+        : typeof m.restaurant?.latitude === "number"
+          ? m.restaurant.latitude
+          : null,
+    lng:
+      typeof m.longitude === "number"
+        ? m.longitude
+        : typeof m.restaurant?.longitude === "number"
+          ? m.restaurant.longitude
+          : null,
+    phone:
+      typeof m.phone === "string"
+        ? m.phone
+        : typeof m.restaurant?.phone === "string"
+          ? m.restaurant.phone
+          : null,
     allergenInformation: m.allergen_information ?? null,
     components,
     optionGroups,

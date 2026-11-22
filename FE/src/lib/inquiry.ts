@@ -1,5 +1,5 @@
 import { allergenLabel } from "@/data/allergens";
-import { restrictionLabel } from "@/data/restrictions";
+import { uniqueAvoidLabels } from "@/lib/profileLabels";
 import type { AllergenId, RestrictionId } from "@/types";
 
 export interface InquiryContext {
@@ -9,17 +9,19 @@ export interface InquiryContext {
   restrictions: RestrictionId[];
 }
 
-/** 성분 나열: 알레르겐, 알레르겐 및 제한, 제한 */
+/** 성분 나열 (표시 라벨 중복 제거) */
 export function formatRestrictedIngredients(
   allergens: AllergenId[],
   restrictions: RestrictionId[],
 ): string {
-  const a = allergens.map(allergenLabel);
-  const r = restrictions.map(restrictionLabel);
+  const labels = uniqueAvoidLabels(allergens, restrictions);
+  if (labels.length === 0) return "제한 성분";
+
+  const allergenSet = new Set(allergens.map(allergenLabel));
+  const a = labels.filter((l) => allergenSet.has(l));
+  const r = labels.filter((l) => !allergenSet.has(l));
   if (a.length && r.length) return `${a.join(", ")} 및 ${r.join(", ")}`;
-  if (a.length) return a.join(", ");
-  if (r.length) return r.join(", ");
-  return "제한 성분";
+  return labels.join(", ");
 }
 
 /**
@@ -42,10 +44,7 @@ export function buildAiStaffPhrase(
   allergens: AllergenId[],
   restrictions: RestrictionId[],
 ): string {
-  const labels = [
-    ...allergens.map(allergenLabel),
-    ...restrictions.map(restrictionLabel),
-  ];
+  const labels = uniqueAvoidLabels(allergens, restrictions);
   const ingredients = labels.length ? labels.join(", ") : "제한";
   return `안녕하세요. ${menuName} 주문 전에 ${ingredients} 관련 성분이 포함되는지 확인하고 싶습니다. 사용된 소스와 가공재료의 성분도 확인 부탁드립니다.`;
 }
