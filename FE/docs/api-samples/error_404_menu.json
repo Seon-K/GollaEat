@@ -1,0 +1,17 @@
+{
+  "_meta": {
+    "method": "GET",
+    "path": "/api/menus/does-not-exist-menu-id-000",
+    "status": 404,
+    "ok": false,
+    "expectError": true,
+    "note": "unknown menu_id → expect 404",
+    "savedAt": "2026-11-22T08:44:36.741Z"
+  },
+  "body": {
+    "error": {
+      "code": "menu_not_found",
+      "message": "menu not found"
+    }
+  }
+}

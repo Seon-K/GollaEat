@@ -1,0 +1,68 @@
+{
+  "_meta": {
+    "method": "POST",
+    "path": "/api/judgements",
+    "status": 200,
+    "ok": true,
+    "expectError": false,
+    "note": "spec: { menu_id } — menus_001123",
+    "savedAt": "2026-11-22T08:43:47.330Z"
+  },
+  "body": {
+    "component_id": "menus_001123",
+    "status": "needs_check",
+    "reasons": [
+      {
+        "condition": "allergen-milk",
+        "name": "우유",
+        "status": "needs_check",
+        "problem_ingredients": [],
+        "unknown_items": [
+          "milk",
+          "source"
+        ],
+        "verified_problem_ingredients": [],
+        "ai_problem_ingredients": [],
+        "ai_evidence": [],
+        "rule_source": "GollaEat 성분 태그 계약 v1: milk",
+        "sources": []
+      },
+      {
+        "condition": "exclude-pork",
+        "name": "돼지고기",
+        "status": "needs_check",
+        "problem_ingredients": [],
+        "unknown_items": [
+          "pork",
+          "source"
+        ],
+        "verified_problem_ingredients": [],
+        "ai_problem_ingredients": [],
+        "ai_evidence": [],
+        "rule_source": "GollaEat 성분 태그 계약 v1: pork",
+        "sources": []
+      }
+    ],
+    "problem_ingredients": [],
+    "unknown_items": [
+      "allergen-milk:milk",
+      "allergen-milk:source",
+      "exclude-pork:pork",
+      "exclude-pork:source"
+    ],
+    "unknown_messages": [
+      "우유 포함 여부 확인 필요",
+      "우유 관련 정보 출처 확인 필요",
+      "돼지고기 포함 여부 확인 필요",
+      "돼지고기 관련 정보 출처 확인 필요"
+    ],
+    "ai_evidence": [],
+    "sources": [],
+    "preference_score": 0,
+    "sort_key": [
+      1,
+      0,
+      "menus_001123"
+    ]
+  }
+}

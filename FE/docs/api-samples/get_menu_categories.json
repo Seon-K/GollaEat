@@ -1,0 +1,22 @@
+{
+  "_meta": {
+    "method": "GET",
+    "path": "/api/menu-categories",
+    "status": 200,
+    "ok": true,
+    "expectError": false,
+    "note": null,
+    "savedAt": "2026-11-22T08:43:27.767Z"
+  },
+  "body": {
+    "categories": [
+      "한식",
+      "중식",
+      "일식",
+      "양식",
+      "분식",
+      "카페",
+      "기타"
+    ]
+  }
+}

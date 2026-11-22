@@ -1,0 +1,26 @@
+{
+  "_meta": {
+    "method": "PATCH",
+    "path": "/api/reviews/2",
+    "status": 200,
+    "ok": true,
+    "expectError": false,
+    "note": null,
+    "savedAt": "2026-11-22T08:44:07.247Z"
+  },
+  "body": {
+    "id": 2,
+    "menu_id": "menus_008023",
+    "body": "probe: 수정된 리뷰입니다.",
+    "is_mine": true,
+    "disclosed_conditions": [
+      {
+        "code": "allergen-milk",
+        "kind": "allergen",
+        "name": "우유"
+      }
+    ],
+    "created_at": "2026-11-22T08:44:05.080375+00:00",
+    "updated_at": "2026-11-22T08:44:08.231246+00:00"
+  }
+}

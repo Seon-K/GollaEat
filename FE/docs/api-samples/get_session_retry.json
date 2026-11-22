@@ -1,0 +1,15 @@
+{
+  "_meta": {
+    "method": "GET",
+    "path": "/api/session",
+    "status": 200,
+    "ok": true,
+    "expectError": false,
+    "note": null,
+    "savedAt": "2026-11-22T08:41:49.052Z"
+  },
+  "body": {
+    "csrf_token": "di5ywkFmxiHGZCFsI3qy7mLfJN3qMUNO3hU5XWV2JpkGLTMFgexp32JbLHFT57E0",
+    "identity": "guest_session"
+  }
+}
