@@ -5,6 +5,7 @@ from .repository import CatalogDataError, CsvCatalogRepository
 from .services import MenuQueryError, get_restaurant_detail, list_menus, list_restaurants
 from .services import list_restaurant_menus
 from .services import serialize_menu_detail
+from .categories import MENU_CATEGORIES
 
 
 def _personalized(request, result):
@@ -41,6 +42,12 @@ def _catalog_unavailable(exc):
         {'error': {'code': 'catalog_unavailable', 'message': str(exc)}},
         status=503,
     )
+
+
+def menu_categories(request):
+    if request.method != 'GET':
+        return _method_not_allowed()
+    return JsonResponse({'categories': list(MENU_CATEGORIES)})
 
 
 def menus(request):

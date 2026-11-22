@@ -74,6 +74,21 @@ def _text_parameter(params, name, maximum_length):
     return value
 
 
+def _menu_categories(params):
+    # 반복 category 파라미터의 OR 필터, 빈 값은 전체 조회
+    values = params.getlist('category') if hasattr(params, 'getlist') else [params.get('category', '')]
+    if len(values) > 20:
+        raise MenuQueryError('category', 'at most 20 categories are allowed')
+    categories = set()
+    for value in values:
+        value = value.strip()
+        if len(value) > 50:
+            raise MenuQueryError('category', 'category must be at most 50 characters')
+        if value:
+            categories.add(value.casefold())
+    return categories
+
+
 def _serialize(menu):
     return {
         **{key: menu[key] for key in ('description', 'menu_option', 'restaurant_type',
@@ -123,7 +138,7 @@ def list_menus(params, repository=None, *, profile=None):
         raise MenuQueryError(unknown[0], f'unknown parameter: {unknown[0]}')
 
     query = _text_parameter(params, 'q', 100)
-    category = _text_parameter(params, 'category', 50)
+    categories = _menu_categories(params)
     min_price = _integer_parameter(params, 'min_price', 0, 0)
     max_price = _integer_parameter(params, 'max_price', None, 0)
     page = _integer_parameter(params, 'page', 1, 1)
@@ -166,8 +181,8 @@ def list_menus(params, repository=None, *, profile=None):
             or normalized_query in menu.get('brand', '').casefold()
             or any(normalized_query in name.casefold() for name in menu.get('restaurant_search_names', []))
         ]
-    if category:
-        menus = [menu for menu in menus if menu['category'].casefold() == category.casefold()]
+    if categories:
+        menus = [menu for menu in menus if menu['category'].casefold() in categories]
 
     menus = [
         menu for menu in menus
@@ -340,10 +355,11 @@ def get_restaurant_detail(restaurant_id, repository):
 
 
 def list_restaurant_menus(restaurant_id, params, repository):
-    unknown = sorted(set(params.keys()) - {'q', 'page', 'limit'})
+    unknown = sorted(set(params.keys()) - {'q', 'page', 'limit', 'category'})
     if unknown:
         raise MenuQueryError(unknown[0], f'unknown parameter: {unknown[0]}')
     query = _text_parameter(params, 'q', 100).casefold()
+    categories = _menu_categories(params)
     page = _integer_parameter(params, 'page', 1, 1)
     limit = _integer_parameter(params, 'limit', 20, 1, 100)
     detail = get_restaurant_detail(restaurant_id, repository)
@@ -351,6 +367,8 @@ def list_restaurant_menus(restaurant_id, params, repository):
         return None
     reference = detail['brand_menu_reference']
     menus = [menu for menu in reference['menus'] if query in menu['menu_name'].casefold()]
+    if categories:
+        menus = [menu for menu in menus if menu.get('category', '').casefold() in categories]
     menus.sort(key=lambda menu: (menu['menu_name'].casefold(), menu['menu_id']))
     total = len(menus)
     pages = math.ceil(total / limit)

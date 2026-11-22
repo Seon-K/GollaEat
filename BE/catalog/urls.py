@@ -5,6 +5,7 @@ from . import extra_views
 
 
 urlpatterns = [
+    path('menu-categories', views.menu_categories, name='menu-category-list'),
     path('restaurants/<str:restaurant_id>/geocode', extra_views.geocode_restaurant, name='restaurant-geocode'),
     path('geocoding/<int:attempt_id>/apply', extra_views.geocode_apply, name='geocode-apply'),
     path('reports', extra_views.reports, name='report-list'),
