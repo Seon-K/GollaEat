@@ -1,5 +1,45 @@
 # 백엔드 B API / A 연동 계약
 
+## 사용자 화면의 판정 상태 안내
+
+`match`는 안전하게 섭취할 수 있다는 확정이나 인증이 아니다.
+공식 프랜차이즈 목록 기준으로는 공식 홈페이지의 알레르겐 표시 정보에
+선택한 제한 성분이 기재되어 있지 않다는 의미다.
+현재의 판정·정렬 규칙은 유지하며 AI 미언급을 match 근거로 사용하지 않는다.
+
+| 상태 | 사용자 안내 기준 |
+| --- | --- |
+| `match` | 공식 목록 또는 확인된 성분 자료 기준 일치. 섭취 안전성 보장 아님 |
+| `needs_check` | 필요한 성분·출처·주문 구성 정보가 부족하거나 변경 사항 확인 필요 |
+| `mismatch` | 제한 성분 포함 근거 또는 Qwen 추출·Gemini 추정에 따라 추천 제외. AI 추정은 포함 확정 아님 |
+
+메뉴 판정 객체에 `guidance`를 추가한다. 메뉴 상세(personalize=true), 탐색(personalize=true 또는 sort=dietary),
+즐겨찾기, 정렬 API에서 같은 객체를 반환한다. 주문 응답은 전체 결과와 구성별 결과에 각각 제공한다.
+직원 안내 API에도 같은 안내를 제공하지만 사용자 화면은 메뉴의 `judgement.guidance`를 사용한다.
+`unknown_messages`는 실제 미확인 항목 전용이며 공통 주의 문구를 넣지 않는다.
+
+공식 알레르겐 목록에 따른 match 예시:
+
+```json
+{
+  "status": "match",
+  "guidance": {
+    "label": "공식 알레르겐 표시 기준 일치",
+    "message": "공식 홈페이지의 알레르겐 정보에 선택한 제한 성분이 기재되어 있지 않습니다.",
+    "notice": "실제 포함 여부와 교차접촉 가능성은 주문 전 매장에 한 번 더 확인해 주세요.",
+    "basis": "official_allergen_list"
+  }
+}
+```
+
+FE는 상태 배지만 표시하지 않고 `label`, `message`, `notice`를 함께 표시한다.
+`basis`는 `official_allergen_list`, `verified_information`, `no_restrictions`,
+`insufficient_information`, `verified_presence`, `gemini_estimated`, `qwen_extracted`,
+`verified_and_ai`, `ai_analysis` 중 하나다.
+알레르겐 이외 제한의 match에는 확인된 성분 자료 기준이라는 별도 문구를 제공한다.
+제한 미선택의 match는 `no_restrictions`로 안내하며 공식 성분 확인 결과로 표현하지 않는다.
+공식 포함과 AI 추정이 섞인 경우에는 `verified_and_ai`로 안내하고 조건별 상세 근거를 함께 사용한다.
+
 ## 주문 선택·검색 정렬·프로필 완료 상태
 
 ### 주문 옵션 관계 검증
@@ -71,11 +111,13 @@ A 분석 메타정보는 verification_status=unverified를 유지하고 judgemen
 usable_for_verified_absence=false로 구분한다. usable_for_dietary_judgement는 AI 재료/구성 정보 보유 시 true다.
 prepare_reference의 affects_judgement=true는 이 배제 정책의 허용 여부이며 결과의 적합 보장은 아니다.
 
-프랜차이즈 공식 정보는 AllergenLink.status=verified_source, 공식·유효 출처,
-검토 완료·메뉴 전체 범위(menu), 현재 브랜드·메뉴명 일치를 모두 요구한다.
+프랜차이즈 공식 정보는 AllergenLink.status가 verified_source 또는 reference이고,
+공식·유효 출처, 메뉴 전체 범위(menu), 현재 브랜드·메뉴명 일치를 요구한다.
+reference 출처는 등록된 브랜드별 공식 호스트와 원본 URL·수집/확인일을 함께 확인한다.
 공식 메뉴별 알레르겐 목록을 서비스의 17개 알레르겐 범위에 대한 전체 목록으로 취급한다.
 등록된 명칭으로 구성된 비어 있지 않은 목록에서 빠진 지원 알레르겐은 불포함으로 비교한다.
-원문 누락·알 수 없는 명칭·부분 범위·미검증·출처 만료·메뉴/브랜드 변경은 이 예외를 적용하지 않는다.
+원문 누락·알 수 없는 명칭·부분 범위·출처 만료·메뉴/브랜드 변경은 이 예외를 적용하지 않는다.
+원본 검토 상태만으로 공식 정보를 일괄 제외하지 않으며 공식 목록에 없는 성분의 실제 불포함을 보장하지 않는다.
 전체 재료 목록으로 확대하지 않으므로 fish/cheese-butter 등 별도 재료 조건이나 전체 식이 유형은
 공식 목록만으로 match가 보장되지 않는다. 공식 메뉴 목록은 기본 메뉴 구성을 다루며 선택 옵션은 별도 점검한다.
 명시적인 기본 구성품 포함 정보 또는 AI 결과와 충돌하면 mismatch가 우선한다.
