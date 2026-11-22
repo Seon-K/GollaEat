@@ -6,7 +6,7 @@ from .map_links import kakao_links
 
 ALLOWED_PARAMETERS = {'q', 'min_price', 'max_price', 'category', 'sort', 'page', 'limit',
     'lat', 'lng', 'radius_km', 'region', 'open_now'}
-SORT_OPTIONS = {'menu_name_asc', 'price_asc', 'price_desc', 'distance_asc'}
+SORT_OPTIONS = {'menu_name_asc', 'price_asc', 'price_desc', 'distance_asc', 'dietary'}
 RESTAURANT_PARAMETERS = {'q', 'brand', 'page', 'limit', 'lat', 'lng', 'radius_km', 'sort',
     'restaurant_type', 'category', 'region', 'open_now', 'min_price', 'max_price'}
 
@@ -75,6 +75,21 @@ def _text_parameter(params, name, maximum_length):
     return value
 
 
+def _menu_categories(params):
+    # 반복 category 파라미터의 OR 필터, 빈 값은 전체 조회
+    values = params.getlist('category') if hasattr(params, 'getlist') else [params.get('category', '')]
+    if len(values) > 20:
+        raise MenuQueryError('category', 'at most 20 categories are allowed')
+    categories = set()
+    for value in values:
+        value = value.strip()
+        if len(value) > 50:
+            raise MenuQueryError('category', 'category must be at most 50 characters')
+        if value:
+            categories.add(value.casefold())
+    return categories
+
+
 def _serialize(menu):
     return {
         **{key: menu[key] for key in ('description', 'menu_option', 'restaurant_type',
@@ -118,13 +133,13 @@ def serialize_menu_detail(menu):
     return result
 
 
-def list_menus(params, repository=None):
+def list_menus(params, repository=None, *, profile=None):
     unknown = sorted(set(params.keys()) - ALLOWED_PARAMETERS)
     if unknown:
         raise MenuQueryError(unknown[0], f'unknown parameter: {unknown[0]}')
 
     query = _text_parameter(params, 'q', 100)
-    category = _text_parameter(params, 'category', 50)
+    categories = _menu_categories(params)
     min_price = _integer_parameter(params, 'min_price', 0, 0)
     max_price = _integer_parameter(params, 'max_price', None, 0)
     page = _integer_parameter(params, 'page', 1, 1)
@@ -158,7 +173,6 @@ def list_menus(params, repository=None):
             selected.append(menu)
         menus = selected
     normalized_query = query.casefold()
-    normalized_category = category.casefold()
 
     if normalized_query:
         menus = [
@@ -168,8 +182,8 @@ def list_menus(params, repository=None):
             or normalized_query in menu.get('brand', '').casefold()
             or any(normalized_query in name.casefold() for name in menu.get('restaurant_search_names', []))
         ]
-    if normalized_category:
-        menus = [menu for menu in menus if menu['category'].casefold() == normalized_category]
+    if categories:
+        menus = [menu for menu in menus if menu['category'].casefold() in categories]
 
     menus = [
         menu for menu in menus
@@ -178,7 +192,16 @@ def list_menus(params, repository=None):
             and (max_price is None or menu['price_amount'] <= max_price))
     ]
 
-    if sort == 'price_asc':
+    judgements = {}
+    if sort == 'dietary':
+        if profile is None:
+            raise MenuQueryError('sort', 'dietary sort requires a session profile')
+        from dietary.services import EvaluationContext, evaluate
+        context = EvaluationContext(profile)
+        context.prime([menu['menu_id'] for menu in menus])
+        judgements = {menu['menu_id']: evaluate(profile, menu['menu_id'], context=context) for menu in menus}
+        menus.sort(key=lambda menu: judgements[menu['menu_id']]['sort_key'])
+    elif sort == 'price_asc':
         menus.sort(key=lambda menu: (menu['price_amount'] is None, menu['price_amount'] or 0, menu['menu_id']))
     elif sort == 'price_desc':
         menus.sort(key=lambda menu: (menu['price_amount'] is None, -(menu['price_amount'] or 0), menu['menu_id']))
@@ -193,7 +216,8 @@ def list_menus(params, repository=None):
     total_pages = math.ceil(total / limit) if total else 0
 
     return {
-        'results': [_serialize(menu) for menu in selected],
+        'results': [dict(_serialize(menu), judgement=judgements[menu['menu_id']])
+                    if judgements else _serialize(menu) for menu in selected],
         'pagination': {
             'page': page,
             'limit': limit,
@@ -334,10 +358,11 @@ def get_restaurant_detail(restaurant_id, repository):
 
 
 def list_restaurant_menus(restaurant_id, params, repository):
-    unknown = sorted(set(params.keys()) - {'q', 'page', 'limit'})
+    unknown = sorted(set(params.keys()) - {'q', 'page', 'limit', 'category'})
     if unknown:
         raise MenuQueryError(unknown[0], f'unknown parameter: {unknown[0]}')
     query = _text_parameter(params, 'q', 100).casefold()
+    categories = _menu_categories(params)
     page = _integer_parameter(params, 'page', 1, 1)
     limit = _integer_parameter(params, 'limit', 20, 1, 100)
     detail = get_restaurant_detail(restaurant_id, repository)
@@ -345,6 +370,8 @@ def list_restaurant_menus(restaurant_id, params, repository):
         return None
     reference = detail['brand_menu_reference']
     menus = [menu for menu in reference['menus'] if query in menu['menu_name'].casefold()]
+    if categories:
+        menus = [menu for menu in menus if menu.get('category', '').casefold() in categories]
     menus.sort(key=lambda menu: (menu['menu_name'].casefold(), menu['menu_id']))
     total = len(menus)
     pages = math.ceil(total / limit)

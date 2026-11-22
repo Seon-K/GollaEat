@@ -55,6 +55,10 @@ class ReviewOwnershipTests(TestCase):
 class EvaluationQueryTests(TestCase):
     # 판정 결과 유지 및 기준 조회 횟수 검증
     def setUp(self):
+        # 기준 조회 횟수 검증과 별도 주문 관계 조회의 분리
+        selection = patch('dietary.services.validate_selection', return_value={'status': 'valid', 'unknown_items': []})
+        selection.start()
+        self.addCleanup(selection.stop)
         self.profile = Profile.objects.create(guest_id=uuid.uuid4())
         self.profile.criteria.set(Criterion.objects.filter(code__in=['allergen-milk', 'exclude-pork', 'prefer-korean']))
         self.data = {

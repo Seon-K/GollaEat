@@ -33,8 +33,7 @@ class HardeningTests(TestCase):
         with patch('dietary.services.get_catalog') as catalog:
             for data in [[], 'milk', {'absent_tags': 'milk'}, {'present_tags': [{}]},
                          {'absent_tags': ['milk'], 'sources': [{}]},
-                         {'absent_tags': ['milk'], 'sources': 'official'},
-                         {'absent_tags': ['milk'], 'preference_tags': [None], 'sources': [{'id': 's'}]}]:
+                         {'absent_tags': ['milk'], 'sources': 'official'}]:
                 with self.subTest(data=data):
                     catalog.return_value.get_component.return_value = data
                     result = evaluate(self.profile, 'menu')

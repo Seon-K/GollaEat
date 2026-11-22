@@ -4,6 +4,7 @@ from .operations import operating_status, source_json, declaration_json, compone
 from .analysis_reference import analysis_json
 from .map_links import kakao_links
 from django.core.exceptions import ValidationError
+from django.db.models import Prefetch
 
 
 class DatabaseCatalogRepository:
@@ -98,7 +99,7 @@ class DatabaseCatalogRepository:
                 return None
             targets = [row]
         else:
-            row = Menu.objects.filter(pk=component_id).first()
+            row = Menu.objects.select_related('restaurant').filter(pk=component_id).first()
             if row is None:
                 return None
             targets = [row, *row.components.filter(is_default=True)]
@@ -109,4 +110,28 @@ class DatabaseCatalogRepository:
             absent = a if absent is None else absent & a
             sources.update(s)
         return {'present_tags': sorted(present), 'absent_tags': sorted((absent or set()) - present),
-            'sources': list(sources.values()), 'preference_tags': []}
+            'sources': list(sources.values()),
+            'preference_tags': []}
+
+    def get_dietary_components(self, menu_ids):
+        # 후보 전체의 메뉴·기본 구성품·성분 근거 일괄 조회
+        declarations = 'declarations__source'
+        menus = Menu.objects.filter(pk__in=menu_ids).select_related('restaurant').prefetch_related(
+            declarations, 'declarations__import_link__menu',
+            Prefetch('components', queryset=MenuComponent.objects.filter(is_default=True).prefetch_related(
+                'declarations__source', 'declarations__import_link__menu')))
+        result = dict.fromkeys(menu_ids)
+        for menu in menus:
+            present, absent, sources = set(), None, {}
+            for target in [menu, *menu.components.all()]:
+                p, a, s = declared_tags(target.declarations.all())
+                present.update(p)
+                absent = a if absent is None else absent & a
+                sources.update(s)
+            result[menu.pk] = {'present_tags': sorted(present),
+                'absent_tags': sorted((absent or set()) - present), 'sources': list(sources.values()),
+                'preference_tags': []}
+        for component_id in menu_ids:
+            if component_id.startswith('component:'):
+                result[component_id] = self.get_dietary_component(component_id)
+        return result

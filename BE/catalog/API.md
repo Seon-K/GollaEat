@@ -49,7 +49,7 @@
 보존한다. `menu_option`은 수집된 원문이며 구조화된 옵션은 별도 `option_groups`, `components`다.
 확인된 판매 상태만 관리자가 `available|unavailable`로 변경한다. 데이터 부재 기본값은 unverified다.
 `personalize=true`인 메뉴 목록은 현재 세션 프로필로 B의 기존 판정을 호출해 `judgement`와
-`saved`를 추가한다. 선호/판정 정렬은 기존 B `/api/recommendations/rank`를 사용한다.
+`saved`를 추가한다. 식이 판정순 정렬은 `sort=dietary`를 사용하며, 메뉴 ID 목록의 별도 정렬은 B `/api/recommendations/rank`를 사용한다.
 저장·리뷰·직원 안내도 기존 B API와 동일한 메뉴 ID를 전달한다.
 
 ### 매장 운영정보
@@ -275,3 +275,27 @@ staff만으로 편집할 수 없고 각 모델의 view/add/change/delete 권한�
 CSV/ZIP/로컬 경로는 Git에 추가하지 않는다. 운영 DB 변경·배포는 로컬 테스트와 별도 승인 사항이다.
 없는 리소스 404, 잘못된 파라미터/JSON 400, 허용하지 않는 메서드 405, CSRF 누락 403.
 정보 미확인은 정상 응답의 unknown/null로 표현하며, 없는 영업/옵션/알레르겐을 만들지 않는다.
+# 메뉴 카테고리 필터
+
+`GET /api/menu-categories`
+
+```json
+{"categories":["한식","중식","일식","양식","분식","카페","기타"]}
+```
+
+전체 메뉴: `GET /api/menus?category=한식`
+
+복수 선택(OR): `GET /api/menus?category=한식&category=중식`
+
+매장별 메뉴: `GET /api/restaurants/{restaurant_id}/menus?category=일식`
+
+카테고리 필터는 페이지 분할 전에 적용한다. 검색어·가격·지역·영업 여부 등 기존 전체 메뉴 필터와 조합 가능하다.
+예: `/api/menus?category=한식&category=분식&max_price=15000&sort=price_asc&page=1&limit=20`.
+식이 판정순 정렬: `/api/menus?category=한식&sort=dietary`.
+매장별 메뉴는 기존 q/page/limit 및 category를 지원한다.
+category 생략·빈 값은 전체 조회, 반복 값은 중복 제거, 앞뒤 공백 제거 후 비교한다.
+기존 사용자 정의 카테고리와의 호환을 위해 목록 외 문자열도 정확 일치 검색하며 미일치 시 빈 결과를 반환한다.
+각 값은 최대 50자, 반복 category는 최대 20개이며 초과 시 400이다.
+카테고리 목록은 필터 선택지이며 음식 선호 또는 알레르겐 판정 기준이 아니다.
+메뉴 category를 필터링하며 별도 필드인 restaurant_type 또는 매장 category는 변경하지 않는다.
+응답의 기존 results/pagination 형식은 유지하며 추가 DB 마이그레이션은 없다.

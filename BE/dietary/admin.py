@@ -14,6 +14,15 @@ class ProfileAdmin(admin.ModelAdmin):
     def has_view_permission(self, request, obj=None):
         return request.user.has_perm('dietary.view_profile')
 
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return self.has_view_permission(request, obj) and request.user.has_perm('dietary.change_profile')
+
+    def has_delete_permission(self, request, obj=None):
+        return self.has_view_permission(request, obj) and request.user.has_perm('dietary.delete_profile')
+
 
 @admin.register(Review)
 class ReviewAdmin(admin.ModelAdmin):
@@ -22,3 +31,9 @@ class ReviewAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+    def get_fields(self, request, obj=None):
+        fields = ['menu_id', 'body', 'disclosed_conditions', 'created_at', 'updated_at']
+        if request.user.has_perm('dietary.view_profile'):
+            fields.insert(0, 'profile')
+        return fields

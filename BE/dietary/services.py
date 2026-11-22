@@ -3,6 +3,7 @@ from .models import Criterion
 from .validation import identifiers, order_components
 from .messages import unknown_messages
 from .catalog_info import component_summaries
+from .order_validation import validate_selection
 
 PRIORITY = {'match': 0, 'needs_check': 1, 'mismatch': 2}
 
@@ -15,7 +16,7 @@ def validate_component(data):
         return None, True
     clean = {}
     invalid = False
-    for field in ['present_tags', 'absent_tags', 'preference_tags']:
+    for field in ['present_tags', 'absent_tags']:
         value = data.get(field, [])
         if not isinstance(value, list) or any(not isinstance(x, str) or not x.strip() for x in value):
             clean[field] = []
@@ -48,12 +49,13 @@ class EvaluationContext:
     def __init__(self, profile, codes=None):
         if codes is not None:
             identifiers(codes)
-            self.criteria = list(Criterion.objects.filter(code__in=codes, active=True).select_related('rule'))
+            self.criteria = list(Criterion.objects.filter(code__in=codes, active=True).exclude(kind='preference').select_related('rule'))
             if len(self.criteria) != len(set(codes)):
                 raise ValueError('Unknown or inactive criterion')
         else:
-            self.criteria = list(profile.criteria.select_related('rule').all())
+            self.criteria = list(profile.criteria.exclude(kind='preference').select_related('rule').all())
         self.rules = {}
+        self.component_data = {}
         for criterion in self.criteria:
             rule = getattr(criterion, 'rule', None)
             if rule and rule.enabled and rule.source:
@@ -61,6 +63,14 @@ class EvaluationContext:
             if codes is not None and criterion.kind != 'preference':
                 if criterion.code not in self.rules or not rule.excluded_tags:
                     raise ValueError('Unsupported criterion: ' + criterion.code)
+
+    def prime(self, component_ids):
+        # 일괄 조회 지원 어댑터의 요청 단위 성분 스냅샷
+        batch = getattr(get_catalog(), 'get_components', None)
+        if callable(batch):
+            data = batch(component_ids)
+            if isinstance(data, dict):
+                self.component_data.update(data)
 
 
 def resolve_criteria(profile, codes):
@@ -73,7 +83,8 @@ def evaluate(profile, component_id, modifications=None, *, criteria=None, contex
         identifiers(modifications)
     context = context if context is not None else EvaluationContext(profile, criteria)
     criteria = context.criteria
-    data = get_catalog().get_component(component_id)
+    data = (context.component_data[component_id] if component_id in context.component_data
+            else get_catalog().get_component(component_id))
     data, invalid_data = validate_component(data)
     reasons = []
     unknown = []
@@ -115,8 +126,8 @@ def evaluate(profile, component_id, modifications=None, *, criteria=None, contex
     status = aggregate(reasons)
     if unknown and status != 'mismatch':
         status = 'needs_check'
-    preferences = {c.code for c in criteria if c.kind == 'preference'}
-    score = len(preferences & set((data or {}).get('preference_tags', [])))
+    # 기존 응답 호환용 고정값, 음식 선호 기능 제외
+    score = 0
     messages = unknown_messages(sorted(set(unknown)), {c.code: c.name for c in criteria})
     return {'component_id': component_id, 'status': status, 'reasons': reasons,
             'problem_ingredients': sorted(problems), 'unknown_items': sorted(set(unknown)),
@@ -126,17 +137,22 @@ def evaluate(profile, component_id, modifications=None, *, criteria=None, contex
 
 
 def rank_menus(profile, menu_ids, *, criteria=None):
-    # 판정 상태 우선, 동일 상태 내 선호 반영
+    # 식이 판정 상태 및 메뉴 ID 기준 정렬
     identifiers(menu_ids)
     context = EvaluationContext(profile, criteria)
+    context.prime(menu_ids)
     return sorted((evaluate(profile, mid, context=context) for mid in menu_ids), key=lambda r: r['sort_key'])
 
 
 def check_order(profile, components, *, context=None):
     order_components(components)
+    selection = validate_selection(components)
     context = context if context is not None else EvaluationContext(profile)
     results = [dict(evaluate(profile, c['id'], c.get('modifications'), context=context), role=c['role']) for c in components]
-    return {'status': aggregate(results), 'components': results}
+    status = aggregate(results)
+    if status == 'match' and selection['status'] == 'needs_check':
+        status = 'needs_check'
+    return {'status': status, 'components': results, 'selection_validation': selection}
 
 
 def communication(profile, components):
@@ -147,6 +163,8 @@ def communication(profile, components):
     allergies = '、'.join(c.name for c in criteria if c.kind == 'allergen') or '등록 없음'
     other = '、'.join(c.name for c in criteria if c.kind != 'allergen') or '등록 없음'
     unknown = sorted({x for r in order['components'] for x in r['unknown_messages']})
+    if order['selection_validation']['status'] == 'needs_check':
+        unknown.append('주문 옵션 구성 및 선택 가능 여부 확인 필요')
     summaries = component_summaries([c['id'] for c in components])
     # 미조회 구성의 ID 유지 및 이름 미확인 표시
     labels = [summaries[c['id']]['name'] if c['id'] in summaries

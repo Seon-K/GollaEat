@@ -1,5 +1,79 @@
 # 백엔드 B API / A 연동 계약
 
+## 주문 선택·검색 정렬·프로필 완료 상태
+
+### 주문 옵션 관계 검증
+
+`POST /api/orders/check`, `POST /api/communication`에서 동일한 선택 제약 검증을 수행한다.
+루트 메뉴는 role=menu, 옵션은 A의 `component:UUID`와 등록된 role을 사용한다.
+옵션에는 소속 메뉴를 루트 구성으로 함께 전달해야 한다. 서로 다른 메뉴 여러 개는 허용한다.
+동일 루트 메뉴·옵션의 중복 선택은 400이며 UUID 대문자/하이픈 생략도 같은 옵션으로 처리한다.
+수량과 주문 라인별 옵션 구성은 현재 계약에 없으므로 같은 메뉴 2인분은 이 API에서 중복 ID로 표현하지 않는다.
+
+각 메뉴의 기본 구성품과 선택 옵션의 합집합으로 그룹 최소·최대 선택 개수를 검사한다.
+기본 옵션의 명시적 재선택은 한 번만 계산한다. 재료 제거 요청 문자열은 기본 옵션을 제외하지 않는다.
+소속·role·필수/최대 선택 위반은 400이며 식이 부적합과 구분한다.
+존재하지 않는 메뉴·옵션은 성분 판정과 함께 needs_check로 유지한다.
+
+성공 응답에 선택 검증 상태를 추가한다.
+`"selection_validation": {"status":"valid","unknown_items":[]}`.
+DB 외 모드나 미조회 구성은 status=needs_check이며 unknown_items에 미확인 ID/사유를 반환한다.
+선택 검증이 미확인이면 주문 전체를 match로 표시하지 않는다. mismatch는 계속 우선한다.
+
+### 검색 식이 정렬
+
+`GET /api/menus?sort=dietary&page=1&limit=20`을 사용한다.
+현재 세션의 저장 프로필로 필터를 통과한 **전체 후보**를 판정·정렬한 뒤 페이지를 분할한다.
+정렬은 match → needs_check → mismatch, 같은 상태는 메뉴 ID순이다. 음식 선호 기능은 제공하지 않는다.
+각 results 항목에 기존 공통 judgement 응답을 포함한다. personalize=true를 함께 쓰면 saved도 포함한다.
+가격·지역·영업 여부 등의 기존 필터와 조합할 수 있다. 기존 가격·거리 정렬 동작은 유지한다.
+후보 성분은 기본 구성품과 근거를 함께 일괄 조회하고 요청 간 캐시는 사용하지 않는다.
+비회원 프로필이 없는 요청은 새 세션 프로필을 사용한다. 제한 미선택 시 적합은 식이 제한 부재의 의미이며 안전 인증이 아니다.
+
+### 프로필 설정 완료
+
+프로필 응답에 `setup_completed`를 추가한다.
+최초 GET은 false, 유효한 PUT/PATCH 저장 후에는 빈 criteria 배열이어도 true다.
+잘못된 입력은 완료 상태를 변경하지 않는다. 요청의 setup_completed 값으로 완료 상태를 임의 변경하지 않는다.
+마이그레이션 0003은 기존 선택 조건이 있는 프로필만 true로 복원한다.
+기존 빈 프로필은 완료 여부를 추정할 수 없어 false로 유지하며 다시 저장하면 true가 된다.
+배포 시 기존 migrate 절차로 새 필드를 적용해야 한다.
+
+### 관리자 개인정보 범위
+
+리뷰 관리자 화면의 profile 필드는 view_profile 권한이 있을 때만 노출한다.
+프로필 수정·삭제는 view_profile과 해당 작업 권한을 함께 요구한다.
+프로필 신규 생성은 비회원 세션 경로로 제한한다. 리뷰 공개 조건은 기존 읽기 전용이다.
+
+## AI 참고 근거 연동 준비 계약 v1
+
+AI 분석 DB 적재/API 연결은 A 담당 범위다. 현재 서비스 API에 참고 정보를 자동 추가하지 않는다.
+`dietary.analysis_reference.prepare_reference()`는 이후 사용할 선택적 정규화 경계이며 판정에 호출하지 않는다.
+다음은 기존 필드를 강제 변경하는 요구가 아닌 A 응답에 대한 **제안 계약**이다. 실제 응답 확정 시 어댑터에서 맞춘다.
+
+```json
+{
+  "analysis_reference": {
+    "qwen": {"ingredients": ["우유"], "components": [], "evidence_level": "DESCRIPTION_SUPPORTED"},
+    "gemini": {"ingredients": [], "status": "not_available"},
+    "public_data": {"food_code": "D001", "food_name": "참고 음식", "allergens": ["밀"], "verification_status": "UNVERIFIED_SIMILAR_FOOD"}
+  }
+}
+```
+
+CSV explicit_ingredients/explicit_components/evidence_level은 qwen,
+gemini_estimated_ingredients/gemini_status는 gemini,
+top1_fd_Code/public_reference_food_name/public_reference_allergens/public_reference_status는 public_data에 대응한다.
+공통 메뉴 ID는 기존 menu_id를 사용한다. 분석 미존재는 analysis_reference=null,
+채널 미존재는 해당 채널=null, 채널은 있으나 목록이 비어 있으면 빈 배열로 구분한다.
+공통 usage=reference_only, affects_judgement=false는 B 정규화 결과에서 강제한다.
+원본은 변경하지 않고 복사하며 Qwen 추출/Gemini 추정/일반 음식 참고를 합치지 않는다.
+
+검증된 reasons/sources와 AI 참고 내용은 별도 영역이다.
+참고 재료를 present_tags/absent_tags에 넣거나 match·mismatch 및 추천 점수를 자동 변경하지 않는다.
+향후 사용자 조건별 참고 안내에 연결할 때도 추정/참고 표시를 유지한다.
+실제 분석 데이터 연결 및 이 계약의 응답 필드 합의는 A의 analysis_reference 제공 시 진행한다.
+
 ## A ORM 메뉴 정보 연동
 
 `CATALOG_USE_DB=true`일 때 A의 Menu·Restaurant·MenuComponent를 재사용한다.
@@ -144,7 +218,7 @@ CSRF 검증을 해제하지 않는다. 세션 UUID는 서버가 생성하며 요
 | GET | `/api/allergens` | 요청된 17개 한국어 명칭, 견과류 통합 |
 | GET | `/api/restricted-ingredients` | 요청된 카테고리·한국어 재료 명칭 |
 | GET | `/api/dietary-criteria` | 저장에 사용할 code/name/kind/category |
-| GET, PUT, PATCH | `/api/profile` | `{"criteria":["allergen-milk","vegan","prefer-korean"]}`; PUT/PATCH 모두 선택 목록 교체 |
+| GET, PUT, PATCH | `/api/profile` | `{"criteria":["allergen-milk","vegan"]}`; PUT/PATCH 모두 선택 목록 교체 |
 | POST | `/api/judgements` | `{"menu_id":"menu-1"}` |
 | POST | `/api/recommendations/rank` | `{"menu_ids":["menu-1","menu-2"]}` |
 | POST | `/api/orders/check` | 아래 구성 예시 |
@@ -185,7 +259,7 @@ role: menu/sauce/topping/side/drink. 1–100개 구성 필수. 모든 구성을 
 {
     'present_tags': ['milk'],
     'absent_tags': ['egg', 'nuts'],
-    'preference_tags': ['prefer-korean'],
+    'preference_tags': [],
     'sources': [{'id': 'source-1', 'title': '공식 성분표', 'url': 'https://example.com/menu',
                  'checked_at': '2026-11-18', 'version': '1'}],
 }
@@ -198,7 +272,7 @@ role: menu/sauce/topping/side/drink. 1–100개 구성 필수. 모든 구성을 
 * other-meat는 소·돼지·닭 이외 육류, other-animal은 나열된 동물성 그룹 이외 성분(어육 추출물 등)의 포괄 태그다. gelatin은 동물 유래 젤라틴이다.
 * 비건·락토오보는 해당 규칙의 **모든 태그** 불포함이 확인되어야 match. 이는 성분 기준이며 종교 인증/의학적 안전 판정이 아니다. 종교·건강 조건은 구체적인 지원 규칙과 근거 데이터가 없으므로 초기 제공하지 않는다.
 * 교차접촉·조리도구 공유 여부는 현재 성분 계약에 포함되지 않는다. match는 선택한 성분 규칙 충족만 의미한다. 직원 안내 문구는 Figma에 맞춰 메뉴와 소스·양념·육수의 재료 확인을 요청한다.
-* A와 합의할 것: ID 네임스페이스·삭제 정책, 성분/상위 그룹 정규화, 근거 출처의 유효 기간, 옵션 관계와 검증된 제거 변형 ID, 교차접촉 데이터, 음식 선호 태그 범위.
+* A와 합의할 것: ID 네임스페이스·삭제 정책, 성분/상위 그룹 정규화, 근거 출처의 유효 기간, 옵션 관계와 검증된 제거 변형 ID, 교차접촉 데이터.
 
 ## 공통 판정 응답 / A 호출
 
@@ -214,8 +288,7 @@ role: menu/sauce/topping/side/drink. 1–100개 구성 필수. 모든 구성을 
 ```
 
 `dietary.services.evaluate(profile, id)`를 탐색·상세에서 사용한다. 즐겨찾기도 같은 함수를 쓴다.
-`rank_menus(profile, ids)`는 상태(match=0, needs_check=1, mismatch=2), 선호 일치 개수 내림차순,
-ID 순으로 정렬한다. 선호는 섭취 제한으로 취급하지 않는다. 제한이 없는 사용자는 메뉴 데이터가 존재하면 match다.
+`rank_menus(profile, ids)`는 상태(match=0, needs_check=1, mismatch=2), ID 순으로 정렬한다. 제한이 없는 사용자는 메뉴 데이터가 존재하면 match다.
 자료가 없거나 규칙이 비활성/부재면 unknown_items에 원인을 반환한다.
 `communication(profile, components)`는 알레르기·기타 제한·선택 ID·미확인 사항을 고정 템플릿으로 반환한다.
 
@@ -224,5 +297,8 @@ ID 순으로 정렬한다. 선호는 섭취 제한으로 취급하지 않는다.
 기준·지원 규칙·리뷰는 각 Django 모델 권한으로 관리한다. Profile은 별도 `view_profile` 권한이 있어야
 모듈 노출/조회 가능하며 수정은 `change_profile` 권한도 필요하다. 개인정보 권한은 필요한 관리자에게만 부여한다.
 리뷰 작성자·공개 스냅샷은 Admin에서도 읽기 전용이다.
-테스트: 정보 부족/출처 부족, 식이 규칙 전체 확인, 주문 집계·제거 요청, 선호 우선순위,
+테스트: 정보 부족/출처 부족, 식이 규칙 전체 확인, 주문 집계·제거 요청, 상태 우선순위,
 세션 소유권 차단, 즐겨찾기 중복·재판정, 리뷰 동의·필터·본인 수정삭제, CSRF, 관리자 권한.
+
+음식 선호 기능은 제공하지 않는다. 기존 preference 기준은 0004에서 비활성화하며 과거 데이터는 보존한다.
+기존 응답 호환을 위해 preference_score=0, sort_key=[상태순위,0,메뉴ID]를 유지한다.

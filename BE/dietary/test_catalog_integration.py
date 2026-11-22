@@ -132,10 +132,10 @@ class CatalogIntegrationTests(TestCase):
                 self.assertEqual(summaries[alias]['name'], '우유 소스')
                 self.assertEqual(summaries[alias]['component_id'], canonical)
                 result = self.send('/api/communication', {
-                    'components': [{'id': alias, 'role': 'sauce'}]})
+                    'components': [{'id': 'm1', 'role': 'menu'}, {'id': alias, 'role': 'sauce'}]})
                 self.assertEqual(result.status_code, 200)
                 body = result.json()
                 self.assertEqual(body['status'], 'mismatch')
-                self.assertEqual(body['order']['components'][0]['name'], '우유 소스')
-                self.assertIn('선택 구성: 우유 소스', body['text'])
+                self.assertEqual(body['order']['components'][1]['name'], '우유 소스')
+                self.assertIn('우유 소스', body['text'])
                 self.assertNotIn('이름 미확인', body['text'])

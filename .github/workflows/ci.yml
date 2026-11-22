@@ -53,6 +53,7 @@ jobs:
       - run: python -m pip install -r requirements.txt
       - run: python manage.py check --settings=config.test_postgres
       - run: python manage.py makemigrations --check --dry-run --settings=config.test_postgres
+      - run: python manage.py collectstatic --noinput --settings=config.test_postgres
       - run: python manage.py test dietary catalog --noinput --settings=config.test_postgres
 
   # 프론트와 백엔드 검사는 각각 독립적으로 실행

@@ -76,6 +76,12 @@ def component_json(item):
         'declarations': [declaration_json(d) for d in item.declarations.all()]}
 
 
+def expand_present_tags(tags):
+    # 확인된 포함 정보의 상위 그룹 확장, 불포함 역추론 제외
+    expansion = {'shrimp': 'crustacean', 'crab': 'crustacean', 'mackerel': 'fish', 'cheese-butter': 'milk'}
+    return set(tags) | {expansion[tag] for tag in tags if tag in expansion}
+
+
 def declared_tags(items):
     present, absent, sources = set(), set(), {}
     now = timezone.now()
@@ -94,8 +100,7 @@ def declared_tags(items):
             continue
         (present if item.presence == 'present' else absent).add(item.canonical_tag)
         sources[item.source_id] = source_json(item.source)
-    expansion = {'shrimp': 'crustacean', 'crab': 'crustacean', 'mackerel': 'fish', 'cheese-butter': 'milk'}
-    present.update(expansion[t] for t in list(present) if t in expansion)
+    present = expand_present_tags(present)
     return present, absent - present, sources
 
 
