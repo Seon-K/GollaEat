@@ -2,11 +2,12 @@
   "name": "gollaeat",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
     "probe:api": "node scripts/probe-api.mjs",
@@ -15,20 +16,21 @@
   "dependencies": {
     "@tanstack/react-query": "^5.108.2",
     "lucide-react": "^1.77.0",
-    "next": "16.4.6",
-    "react": "19.3.0",
-    "react-dom": "19.3.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router-dom": "^7.18.5",
     "zustand": "^5.1.0"
   },
   "devDependencies": {
-    "@tailwindcss/turbopack": "4.3.3",
+    "@tailwindcss/vite": "4.3.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^5.0.0",
     "eslint": "^9",
-    "eslint-config-next": "16.4.6",
     "tailwindcss": "4.3.3",
     "typescript": "^5",
+    "vite": "^7.0.0",
     "vitest": "^3.2.4"
   }
 }

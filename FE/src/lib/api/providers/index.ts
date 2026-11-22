@@ -7,7 +7,7 @@ export { apiProvider } from "@/lib/api/providers/apiProvider";
 export { mockProvider } from "@/lib/api/providers/mockProvider";
 
 export function getDataMode(): DataMode {
-  const mode = process.env.NEXT_PUBLIC_DATA_MODE;
+  const mode = import.meta.env.VITE_DATA_MODE as string | undefined;
   return mode === "mock" ? "mock" : "api";
 }
 
