@@ -32,3 +32,28 @@ class ChatApiTests(TestCase):
         self.assertEqual(self.send(Client(), {'message': ''}).status_code, 400)
         self.assertEqual(self.send(Client(), {'new_conversation': 'yes'}).status_code, 400)
         self.assertEqual(self.send(Client(enforce_csrf_checks=True), {'message': '질문'}).status_code, 403)
+
+    @patch('chatbot.views.BackendSearch.__call__')
+    @patch('chatbot.views.parse_gemini', return_value={
+        'place': '순천향대', 'menu': '김밥', 'allergens': ['우유'],
+    })
+    def test_place_selection_reuses_conditions_without_parsing(self, parse, search):
+        location = {'lat': 36.77, 'lng': 126.93}
+        search.side_effect = [
+            {'question': '장소를 선택해 주세요.', 'place_candidates': [{'location': location}]},
+            {'matched': [], 'needs_check': [{
+                'restaurant': '예시 분식점', 'distance_m': 150,
+                'menus': [{'name': '김밥', 'reason': '우유 정보 확인 필요'}],
+            }]},
+        ]
+        client = Client()
+        self.assertEqual(self.send(client, {'message': '순천향대 근처 김밥 찾아줘'}).status_code, 200)
+        response = self.send(client, {'location': location})
+        self.assertEqual(response.status_code, 200)
+        parse.assert_called_once()
+        state = search.call_args.args[0]
+        self.assertEqual(state['location'], location)
+        self.assertEqual(state['menu'], '김밥')
+        self.assertEqual(state['allergens'], ['우유'])
+        self.assertNotIn('place', state)
+        self.assertEqual(response.json()['result']['needs_check'][0]['restaurant'], '예시 분식점')
