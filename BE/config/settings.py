@@ -12,10 +12,13 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import os
 from pathlib import Path
+import dj_database_url
+from dotenv import load_dotenv
 from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / '.env', override=False, encoding='utf-8-sig')
 
 
 # Quick-start development settings - unsuitable for production
@@ -32,10 +35,24 @@ ALLOWED_HOSTS = [host.strip() for host in os.getenv(
     'DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,[::1]'
 ).split(',') if host.strip()]
 
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.getenv(
+    'DJANGO_CSRF_TRUSTED_ORIGINS', ''
+).split(',') if origin.strip()]
+
+# Railway terminates TLS and sets X-Forwarded-Proto before forwarding requests.
+# Only enable this behind a trusted proxy that controls this header.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+
 
 # Application definition
 
 INSTALLED_APPS = [
+    'catalog',
+    'dietary',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -46,6 +63,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -77,12 +95,28 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+database_url = os.getenv('DATABASE_URL', '').strip()
+if database_url:
+    try:
+        database_config = dj_database_url.parse(
+            database_url,
+            conn_max_age=60,
+            conn_health_checks=True,
+            ssl_require=True,
+        )
+    except ValueError:
+        # Do not expose a connection URL containing database credentials.
+        raise ImproperlyConfigured('DATABASE_URL must be a valid PostgreSQL URL') from None
+    if database_config['ENGINE'] != 'django.db.backends.postgresql':
+        raise ImproperlyConfigured('DATABASE_URL must use PostgreSQL')
+    DATABASES = {'default': database_config}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': os.getenv('SQLITE_PATH', str(BASE_DIR / 'db.sqlite3')),
+        }
     }
-}
 
 
 # Password validation
@@ -119,9 +153,33 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Read-only catalog CSV sources. Keep machine-specific paths out of source control.
+CATALOG_MENU_CSV = os.getenv('CATALOG_MENU_CSV', '')
+CATALOG_FINAL_CSV = os.getenv('CATALOG_FINAL_CSV', '')
+CATALOG_USE_DB = os.getenv('CATALOG_USE_DB', 'true').lower() == 'true'
+CATALOG_GEOCODER = os.getenv('CATALOG_GEOCODER', 'catalog.geocoding.Geocoder')
+CATALOG_GEOCODER_API_KEY = os.getenv('CATALOG_GEOCODER_API_KEY', '')
+CATALOG_GEOCODER_TIMEOUT = os.getenv('CATALOG_GEOCODER_TIMEOUT', '5')
+CATALOG_COORDINATE_VALIDATION_CSV = os.getenv('CATALOG_COORDINATE_VALIDATION_CSV', '')
+CATALOG_RESTAURANT_CSV = os.getenv('CATALOG_RESTAURANT_CSV', '')
+DIETARY_CATALOG_ADAPTER = 'catalog.adapters.DietaryCatalog'
+CATALOG_COORDINATE_CSVS = tuple(filter(None, (
+    os.getenv('CATALOG_FRANCHISE_COORDINATE_CSV', ''),
+    os.getenv('CATALOG_ASAN_COORDINATE_CSV', ''),
+)))
