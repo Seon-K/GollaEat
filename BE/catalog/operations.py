@@ -1,5 +1,6 @@
 """Unknown data stays unknown; public reports never directly update catalog records."""
 from datetime import datetime, timedelta
+import re
 
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.db import transaction
@@ -102,6 +103,36 @@ def declared_tags(items):
         sources[item.source_id] = source_json(item.source)
     present = expand_present_tags(present)
     return present, absent - present, sources
+
+
+def official_menu_allergens(menu):
+    # 검토된 프랜차이즈 공식 메뉴 목록의 알레르겐 범위
+    empty = (set(), set(), {})
+    link = getattr(menu, 'allergen_link', None)
+    if not link or link.status != 'verified_source' or not source_usable(link.source):
+        return empty
+    payload = link.payload
+    if (link.source.source_type != 'official' or not isinstance(payload, dict)
+            or payload.get('allergen_declaration_scope') != 'menu'
+            or payload.get('verification_status') not in {'manual_visual_checked', 'official_image_visual_checked'}
+            or normalize_brand(payload.get('menu_name_raw', '')) != normalize_brand(menu.name)
+            or normalize_brand(menu.restaurant.brand) != normalize_brand(link.brand)):
+        return empty
+    from .adapters import DietaryCatalog
+    supported = {'egg', 'milk', 'buckwheat', 'nuts', 'soy', 'wheat', 'mackerel', 'crab',
+                 'shrimp', 'pork', 'peach', 'tomato', 'sulfites', 'chicken', 'beef', 'squid', 'shellfish'}
+    raw = payload.get('allergens_contains_normalized')
+    if not isinstance(raw, str):
+        return empty
+    tokens = [token.strip() for token in re.split(r'[,;|/\n]+', raw) if token.strip()]
+    if not tokens or any(token not in DietaryCatalog.TAGS for token in tokens):
+        return empty
+    present = {DietaryCatalog.TAGS[token] for token in tokens}
+    present.update({'고등어': 'mackerel', '게': 'crab', '새우': 'shrimp'}[t]
+                   for t in tokens if t in {'고등어', '게', '새우'})
+    present = expand_present_tags(present)
+    source = dict(source_json(link.source), interpretation='official_menu_allergen_list')
+    return present, supported - present, {link.source_id: source}
 
 
 @transaction.atomic

@@ -1,6 +1,7 @@
 """ORM read boundary. No source CSV is opened by this repository."""
 from .models import Menu, Restaurant, MenuComponent, AllergenLink
 from .operations import operating_status, source_json, declaration_json, component_json, declared_tags
+from .operations import official_menu_allergens
 from .analysis_reference import analysis_json
 from .map_links import kakao_links
 from django.core.exceptions import ValidationError
@@ -99,7 +100,7 @@ class DatabaseCatalogRepository:
                 return None
             targets = [row]
         else:
-            row = Menu.objects.select_related('restaurant', 'analysis_reference').filter(pk=component_id).first()
+            row = Menu.objects.select_related('restaurant', 'analysis_reference', 'allergen_link__source').filter(pk=component_id).first()
             if row is None:
                 return None
             targets = [row, *row.components.filter(is_default=True)]
@@ -109,7 +110,12 @@ class DatabaseCatalogRepository:
             present.update(p)
             absent = a if absent is None else absent & a
             sources.update(s)
-        return {'present_tags': sorted(present), 'absent_tags': sorted((absent or set()) - present),
+        official_absent = set()
+        if isinstance(row, Menu):
+            p, official_absent, s = official_menu_allergens(row)
+            present.update(p)
+            sources.update(s)
+        return {'present_tags': sorted(present), 'absent_tags': sorted(((absent or set()) | official_absent) - present),
             'sources': list(sources.values()),
             'preference_tags': [],
             'analysis_reference': analysis_json(getattr(row, 'analysis_reference', None)) if isinstance(row, Menu) else None}
@@ -117,7 +123,7 @@ class DatabaseCatalogRepository:
     def get_dietary_components(self, menu_ids):
         # 후보 전체의 메뉴·기본 구성품·성분 근거 일괄 조회
         declarations = 'declarations__source'
-        menus = Menu.objects.filter(pk__in=menu_ids).select_related('restaurant', 'analysis_reference').prefetch_related(
+        menus = Menu.objects.filter(pk__in=menu_ids).select_related('restaurant', 'analysis_reference', 'allergen_link__source').prefetch_related(
             declarations, 'declarations__import_link__menu',
             Prefetch('components', queryset=MenuComponent.objects.filter(is_default=True).prefetch_related(
                 'declarations__source', 'declarations__import_link__menu')))
@@ -129,8 +135,11 @@ class DatabaseCatalogRepository:
                 present.update(p)
                 absent = a if absent is None else absent & a
                 sources.update(s)
+            p, official_absent, s = official_menu_allergens(menu)
+            present.update(p)
+            sources.update(s)
             result[menu.pk] = {'present_tags': sorted(present),
-                'absent_tags': sorted((absent or set()) - present), 'sources': list(sources.values()),
+                'absent_tags': sorted(((absent or set()) | official_absent) - present), 'sources': list(sources.values()),
                 'preference_tags': [],
                 'analysis_reference': analysis_json(getattr(menu, 'analysis_reference', None))}
         for component_id in menu_ids:
