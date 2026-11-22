@@ -8,6 +8,12 @@ from .operations import expand_present_tags
 
 
 class DietaryCatalog:
+    def get_components(self, menu_ids):
+        if settings.CATALOG_USE_DB:
+            from .db_repository import DatabaseCatalogRepository
+            return DatabaseCatalogRepository().get_dietary_components(menu_ids)
+        return {mid: self.get_component(mid) for mid in menu_ids}
+
     # Only reviewed declarations are eligible; structure checks alone are not proof.
     VERIFIED = {'manual_visual_checked', 'official_image_visual_checked'}
     TAGS = {

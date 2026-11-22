@@ -54,6 +54,7 @@ class EvaluationContext:
         else:
             self.criteria = list(profile.criteria.select_related('rule').all())
         self.rules = {}
+        self.component_data = {}
         for criterion in self.criteria:
             rule = getattr(criterion, 'rule', None)
             if rule and rule.enabled and rule.source:
@@ -61,6 +62,14 @@ class EvaluationContext:
             if codes is not None and criterion.kind != 'preference':
                 if criterion.code not in self.rules or not rule.excluded_tags:
                     raise ValueError('Unsupported criterion: ' + criterion.code)
+
+    def prime(self, component_ids):
+        # 일괄 조회 지원 어댑터의 요청 단위 성분 스냅샷
+        batch = getattr(get_catalog(), 'get_components', None)
+        if callable(batch):
+            data = batch(component_ids)
+            if isinstance(data, dict):
+                self.component_data.update(data)
 
 
 def resolve_criteria(profile, codes):
@@ -73,7 +82,8 @@ def evaluate(profile, component_id, modifications=None, *, criteria=None, contex
         identifiers(modifications)
     context = context if context is not None else EvaluationContext(profile, criteria)
     criteria = context.criteria
-    data = get_catalog().get_component(component_id)
+    data = (context.component_data[component_id] if component_id in context.component_data
+            else get_catalog().get_component(component_id))
     data, invalid_data = validate_component(data)
     reasons = []
     unknown = []
@@ -129,6 +139,7 @@ def rank_menus(profile, menu_ids, *, criteria=None):
     # 판정 상태 우선, 동일 상태 내 선호 반영
     identifiers(menu_ids)
     context = EvaluationContext(profile, criteria)
+    context.prime(menu_ids)
     return sorted((evaluate(profile, mid, context=context) for mid in menu_ids), key=lambda r: r['sort_key'])
 
 

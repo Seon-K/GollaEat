@@ -10,12 +10,15 @@ from .services import serialize_menu_detail
 def _personalized(request, result):
     from dietary.views import owner
     from dietary.models import Favorite
-    from dietary.services import evaluate
+    from dietary.services import EvaluationContext, evaluate
     profile = owner(request)
+    context = EvaluationContext(profile)
+    context.prime([menu['menu_id'] for menu in result['results'] if 'judgement' not in menu])
     saved = set(Favorite.objects.filter(profile=profile).values_list('menu_id', flat=True))
     for menu in result['results']:
         menu['saved'] = menu['menu_id'] in saved
-        menu['judgement'] = evaluate(profile, menu['menu_id'])
+        if 'judgement' not in menu:
+            menu['judgement'] = evaluate(profile, menu['menu_id'], context=context)
     return result
 
 
@@ -50,7 +53,11 @@ def menus(request):
         if personalize not in {'true', 'false'}:
             raise MenuQueryError('personalize', 'personalize must be true or false')
         params.pop('personalize', None)
-        result = list_menus(params, _csv_repository())
+        profile = None
+        if params.get('sort') == 'dietary':
+            from dietary.views import owner
+            profile = owner(request)
+        result = list_menus(params, _csv_repository(), profile=profile)
         return JsonResponse(_personalized(request, result) if personalize == 'true' else result)
     except CatalogDataError as exc:
         return _catalog_unavailable(exc)

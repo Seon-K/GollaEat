@@ -5,7 +5,7 @@ from .repository import MockMenuRepository, normalize_brand
 
 ALLOWED_PARAMETERS = {'q', 'min_price', 'max_price', 'category', 'sort', 'page', 'limit',
     'lat', 'lng', 'radius_km', 'region', 'open_now'}
-SORT_OPTIONS = {'menu_name_asc', 'price_asc', 'price_desc', 'distance_asc'}
+SORT_OPTIONS = {'menu_name_asc', 'price_asc', 'price_desc', 'distance_asc', 'dietary'}
 RESTAURANT_PARAMETERS = {'q', 'brand', 'page', 'limit', 'lat', 'lng', 'radius_km', 'sort',
     'restaurant_type', 'category', 'region', 'open_now', 'min_price', 'max_price'}
 
@@ -117,7 +117,7 @@ def serialize_menu_detail(menu):
     return result
 
 
-def list_menus(params, repository=None):
+def list_menus(params, repository=None, *, profile=None):
     unknown = sorted(set(params.keys()) - ALLOWED_PARAMETERS)
     if unknown:
         raise MenuQueryError(unknown[0], f'unknown parameter: {unknown[0]}')
@@ -157,7 +157,6 @@ def list_menus(params, repository=None):
             selected.append(menu)
         menus = selected
     normalized_query = query.casefold()
-    normalized_category = category.casefold()
 
     if normalized_query:
         menus = [
@@ -167,8 +166,8 @@ def list_menus(params, repository=None):
             or normalized_query in menu.get('brand', '').casefold()
             or any(normalized_query in name.casefold() for name in menu.get('restaurant_search_names', []))
         ]
-    if normalized_category:
-        menus = [menu for menu in menus if menu['category'].casefold() == normalized_category]
+    if category:
+        menus = [menu for menu in menus if menu['category'].casefold() == category.casefold()]
 
     menus = [
         menu for menu in menus
@@ -177,7 +176,16 @@ def list_menus(params, repository=None):
             and (max_price is None or menu['price_amount'] <= max_price))
     ]
 
-    if sort == 'price_asc':
+    judgements = {}
+    if sort == 'dietary':
+        if profile is None:
+            raise MenuQueryError('sort', 'dietary sort requires a session profile')
+        from dietary.services import EvaluationContext, evaluate
+        context = EvaluationContext(profile)
+        context.prime([menu['menu_id'] for menu in menus])
+        judgements = {menu['menu_id']: evaluate(profile, menu['menu_id'], context=context) for menu in menus}
+        menus.sort(key=lambda menu: judgements[menu['menu_id']]['sort_key'])
+    elif sort == 'price_asc':
         menus.sort(key=lambda menu: (menu['price_amount'] is None, menu['price_amount'] or 0, menu['menu_id']))
     elif sort == 'price_desc':
         menus.sort(key=lambda menu: (menu['price_amount'] is None, -(menu['price_amount'] or 0), menu['menu_id']))
@@ -192,7 +200,8 @@ def list_menus(params, repository=None):
     total_pages = math.ceil(total / limit) if total else 0
 
     return {
-        'results': [_serialize(menu) for menu in selected],
+        'results': [dict(_serialize(menu), judgement=judgements[menu['menu_id']])
+                    if judgements else _serialize(menu) for menu in selected],
         'pagination': {
             'page': page,
             'limit': limit,
