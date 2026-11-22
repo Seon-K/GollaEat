@@ -4,7 +4,7 @@ import io
 from unittest import skipUnless
 from django.test import TestCase, Client, override_settings
 from django.core.management import call_command
-from .models import Menu, Restaurant, MenuComponent, BusinessHours, FoodDeclaration, AllergenLink
+from .models import Menu, Restaurant, MenuComponent, BusinessHours, FoodDeclaration, AllergenLink, MenuAnalysisReference
 
 
 @skipUnless(os.getenv('FINAL_TEST_CSV'), 'External final CSV not supplied')
@@ -89,3 +89,26 @@ class FinalDataTests(TestCase):
                     self.assertEqual(send('/api/judgements', {'menu_id': link.menu_id})['status'], 'mismatch')
                 reference = AllergenLink.objects.filter(status='reference').first()
                 self.assertEqual(send('/api/judgements', {'menu_id': reference.menu_id})['status'], 'needs_check')
+            if os.getenv('ANALYSIS_TEST_CSV'):
+                from dietary.catalog import get_catalog
+                snapshots = list(Menu.objects.order_by('pk').values_list('pk', 'restaurant_id', 'name', 'price_amount'))
+                protected_ids = [mid, *AllergenLink.objects.filter(status='verified_source').values_list('menu_id', flat=True)]
+                before = {key: get_catalog().get_component(key) for key in protected_ids}
+                declarations = FoodDeclaration.objects.count()
+                call_command('import_menu_analysis', csv=os.environ['ANALYSIS_TEST_CSV'], stdout=io.StringIO())
+                call_command('import_menu_analysis', csv=os.environ['ANALYSIS_TEST_CSV'], stdout=io.StringIO())
+                self.assertEqual(MenuAnalysisReference.objects.count(), 6034)
+                self.assertEqual(Menu.objects.filter(analysis_reference__isnull=True).count(), 2402)
+                self.assertEqual(Restaurant.objects.count(), 356)
+                self.assertEqual(snapshots, list(Menu.objects.order_by('pk').values_list('pk', 'restaurant_id', 'name', 'price_amount')))
+                self.assertEqual(MenuAnalysisReference.objects.filter(ingredient_source='QWEN_TEXT_EXTRACTION').count(), 1948)
+                self.assertEqual(MenuAnalysisReference.objects.filter(ingredient_source='GEMINI_ESTIMATED').count(), 463)
+                self.assertEqual(MenuAnalysisReference.objects.filter(gemini_status='success').count(), 475)
+                self.assertEqual(FoodDeclaration.objects.count(), declarations)
+                self.assertEqual(before, {key: get_catalog().get_component(key) for key in protected_ids})
+                missing = Menu.objects.filter(analysis_reference__isnull=True).first()
+                self.assertIsNone(client.get('/api/menus/' + missing.pk).json()['analysis_reference'])
+                with_analysis = MenuAnalysisReference.objects.order_by('menu_id').first().menu_id
+                analysis = client.get('/api/menus/' + with_analysis).json()['analysis_reference']
+                self.assertIsNotNone(analysis)
+                self.assertFalse(analysis['usable_for_dietary_judgement'])

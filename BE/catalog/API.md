@@ -61,6 +61,66 @@
 `takeaway`, `delivery`는 bool 또는 null. 외부 연결은 `reservation_url`, `directions_url`,
 `map_url`, `contact_url`이다. 없는 예약 링크나 영업정보는 생성하지 않는다.
 
+좌표가 있는 매장에는 `kakao_map_url`과 `kakao_directions_url`을 추가 제공한다.
+사용자 `lat/lng`를 포함한 매장 목록 요청에는 `walking_directions_url`도 제공한다.
+출발 좌표가 없으면 도보 링크는 null이다. 기존 map_url/directions_url은 변경하지 않는다.
+이는 [Kakao 지도 외부 URL](https://apis.map.kakao.com/web/guide/#routeurl)을 만드는 기능이며
+API 호출·실제 도보거리·소요시간 계산은 하지 않는다.
+
+## AI 분석 참고 정보 (메뉴 상세 전용)
+
+`GET /api/menus/{id}`에만 `analysis_reference`를 추가한다. 기존 `Menu` 필드·ID·목록·검색
+함수 반환 형식은 유지한다. 분석 레코드가 없으면 `analysis_reference: null`이다.
+`ingredient_source=NONE`은 재료 추출/추정이 없다는 뜻이며 구성 음식·참고 음식 정보까지 없다는 뜻은 아니다.
+
+```json
+{
+  "analysis_reference": {
+    "ingredient_source": "GEMINI_ESTIMATED",
+    "qwen": {
+      "ingredients": [], "components": ["세트"],
+      "evidence_level": "NO_EXPLICIT_INGREDIENT",
+      "information_status": "NO_EXPLICIT_INGREDIENT"
+    },
+    "gemini": {"estimated_ingredients": ["우유"], "processing_status": "success"},
+    "public_reference": {
+      "food_code": "참고 음식 코드", "food_name": "참고 음식",
+      "allergens": "우유 | 밀", "allergy_raw": "참고 원문",
+      "match_present": true, "status": "UNVERIFIED_SIMILAR_FOOD"
+    },
+    "restaurant_ingredient_verification": "NOT_VERIFIED",
+    "allergy_safety_status": "UNKNOWN_NOT_VERIFIED",
+    "verification_status": "unverified",
+    "usable_for_dietary_judgement": false,
+    "source": {"filename": "menugen_backend_final.csv", "sha256": "파일 SHA-256", "imported_at": "적재 시각"},
+    "notice": "텍스트 추출·AI 추정·유사 음식 참고 정보이며 실제 매장 재료 및 알레르기 안전성을 확인한 정보가 아닙니다."
+  }
+}
+```
+
+- `qwen.ingredients`와 `qwen.components`는 텍스트 추출 결과이며 전체 원재료·주문 옵션을 보장하지 않는다.
+- `gemini.processing_status=success`도 재료 목록이 비어 있을 수 있다. 오류/빈 목록은 불포함 증거가 아니다.
+- 공공데이터 이름/알레르겐의 `|` 구분 문자열은 원문대로 제공하며 항목별 대응 관계를 임의 생성하지 않는다.
+- `public_reference.match_present`는 코드 존재 여부다. 상태 문자열만으로 후보 존재를 판정하지 않는다.
+- 적재 시각은 분석 생성·검증 시각이 아니다. 개별 재료 신뢰도·근거 위치·모델 버전은 제공 데이터에 없다.
+- 별도 `MenuAnalysisReference` 테이블만 사용하며 FoodDeclaration/AllergenLink/CatalogSource나
+  B의 present_tags/absent_tags에 전환하지 않는다. 기존 검증된 2개 메뉴 근거도 변경하지 않는다.
+
+최종 메뉴 DB를 먼저 적재한 뒤 다음 명령을 실행한다(외부 파일, 운영 적용은 별도 승인).
+
+```sh
+python manage.py import_menu_analysis --csv /external/menugen_backend_final.csv --dry-run
+python manage.py import_menu_analysis --csv /external/menugen_backend_final.csv
+```
+
+`preprocess_row_id` 기준 upsert이며 기존 메뉴/매장은 생성·수정·삭제하지 않는다.
+행 ID 중복, 기존 메뉴 없음, 매장 ID/메뉴명/매장명 불일치, 잘못된 JSON 목록, 검증 완료 주장 등은
+전체 실패로 처리한다. 공백/Unicode/대소문자 이외에는 이름을 유사 매칭하지 않는다.
+배치 전체를 먼저 검증하고 트랜잭션으로 반영한다. 재실행은 중복 생성하지 않으며 입력에 없는
+기존 분석 레코드는 삭제하지 않는다. CSV 원문은 payload에, 파일명(절대 경로 제외)과 해시는 출처로 저장한다.
+분석 컬럼의 빈 문자열 목록은 API에서 `[]`로 정규화하되 원문은 payload에 보존한다.
+관리자 화면에서는 조회만 가능하며 일반 API로 참고 정보를 수정·검증 완료 처리할 수 없다.
+
 ## 메뉴 옵션·구성품
 
 메뉴 상세의 `option_groups`: `group_id`, `name`, `min_select`, `max_select`, `source`.

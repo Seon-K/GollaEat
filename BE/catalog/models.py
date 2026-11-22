@@ -258,3 +258,26 @@ class GeocodeAttempt(models.Model):
     applied_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
     created_at = models.DateTimeField(auto_now_add=True)
     applied_at = models.DateTimeField(null=True, blank=True)
+
+
+class MenuAnalysisReference(models.Model):
+    """Unverified display information only; never a dietary declaration."""
+    menu = models.OneToOneField(Menu, primary_key=True, on_delete=models.PROTECT, related_name='analysis_reference')
+    explicit_ingredients = models.JSONField(default=list, blank=True)
+    explicit_components = models.JSONField(default=list, blank=True)
+    gemini_estimated_ingredients = models.JSONField(default=list, blank=True)
+    ingredient_source = models.CharField(max_length=40)
+    evidence_level = models.CharField(max_length=40)
+    information_status = models.CharField(max_length=40)
+    gemini_status = models.CharField(max_length=100, blank=True)
+    public_food_code = models.TextField(blank=True)
+    public_food_name = models.TextField(blank=True)
+    public_allergens = models.TextField(blank=True)
+    public_allergy_raw = models.TextField(blank=True)
+    public_reference_status = models.CharField(max_length=50, default='UNVERIFIED_SIMILAR_FOOD')
+    restaurant_ingredient_verification = models.CharField(max_length=50, default='NOT_VERIFIED')
+    allergy_safety_status = models.CharField(max_length=50, default='UNKNOWN_NOT_VERIFIED')
+    payload = models.JSONField(default=dict, blank=True)
+    source_filename = models.CharField(max_length=255)
+    source_sha256 = models.CharField(max_length=64)
+    imported_at = models.DateTimeField(auto_now=True)

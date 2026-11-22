@@ -1,6 +1,7 @@
 import math
 
 from .repository import MockMenuRepository, normalize_brand
+from .map_links import kakao_links
 
 
 ALLOWED_PARAMETERS = {'q', 'min_price', 'max_price', 'category', 'sort', 'page', 'limit',
@@ -303,6 +304,8 @@ def list_restaurants(params, repository):
     for item in restaurants:
         point = coordinates.get(item['restaurant_id'])
         item['distance_km'] = haversine_km(lat, lng, *point) if point else None
+        item.update(kakao_links(item['restaurant_name'], item.get('latitude'), item.get('longitude'),
+            lat if has_location else None, lng if has_location else None))
     if radius is not None:
         restaurants = [item for item in restaurants if item['distance_km'] is not None
                        and item['distance_km'] <= radius]

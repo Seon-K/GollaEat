@@ -1,6 +1,8 @@
 """ORM read boundary. No source CSV is opened by this repository."""
 from .models import Menu, Restaurant, MenuComponent, AllergenLink
 from .operations import operating_status, source_json, declaration_json, component_json, declared_tags
+from .analysis_reference import analysis_json
+from .map_links import kakao_links
 from django.core.exceptions import ValidationError
 from django.db.models import Prefetch
 
@@ -25,6 +27,7 @@ class DatabaseCatalogRepository:
             closures=[{'date': c.date, 'reason': c.reason, 'source': source_json(c.source)} for c in row.closures.all()])
         if (row.latitude, row.longitude) != (row.data.get('latitude'), row.data.get('longitude')):
             result['coordinate_verification_status'] = 'manual_changed_unverified'
+        result.update(kakao_links(row.name, row.latitude, row.longitude))
         return result
 
     def _menu(self, row):
@@ -60,7 +63,7 @@ class DatabaseCatalogRepository:
                     .order_by('preprocess_row_id')]
 
     def get_menu(self, menu_id):
-        row = Menu.objects.select_related('restaurant').filter(pk=menu_id).first()
+        row = Menu.objects.select_related('restaurant', 'analysis_reference').filter(pk=menu_id).first()
         if row is None:
             return None
         menu = self._menu(row)
@@ -77,6 +80,7 @@ class DatabaseCatalogRepository:
             'source': source_json(link.source)}
         return dict(menu, allergen_information={'allergens_contains_normalized': None,
             'declarations': declarations, 'brand_reference': reference},
+            analysis_reference=analysis_json(getattr(row, 'analysis_reference', None)),
             original_information={'description_raw': menu.get('description')},
             source={'source_url': None, 'collected_at': menu.get('collected_at')},
             verification={'verification_status': 'declarations_available' if declarations else 'unmatched'}, safety_assessment='not_determined',
