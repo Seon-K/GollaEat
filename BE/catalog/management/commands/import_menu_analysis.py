@@ -21,7 +21,7 @@ class Command(BaseCommand):
         rows = read_analysis_csv(options['csv'])
         counts = Counter()
         with transaction.atomic():
-            query = Menu.objects.filter(pk__in=[row['preprocess_row_id'] for row, _ in rows])
+            query = Menu.objects.filter(pk__in=[row['preprocess_row_id'] for row, _ in rows]).prefetch_related('restaurant')
             # No nullable JOIN in the row-lock query; PostgreSQL-safe, read-only dry-run.
             if not options['dry_run']:
                 query = query.select_for_update()
