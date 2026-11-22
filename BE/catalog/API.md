@@ -307,5 +307,10 @@ category 생략·빈 값은 전체 조회, 반복 값은 중복 제거, 앞뒤 �
 B의 판정은 Qwen 추출·Gemini 추정의 제한 성분 일치 시 mismatch를 반환한다.
 AI 출처는 ai_evidence에서 확인하며 검증 sources와 분리한다.
 공식 프랜차이즈 메뉴 전체 알레르겐 목록의 조건·출처가 유효하면 미표시 알레르겐에 대해 match가 가능하다.
+match는 공식 표시 정보상 선택한 제한 성분이 기재되어 있지 않다는 뜻이며 섭취 안전성을 보장하지 않는다.
+개인화 judgement의 guidance(label/message/notice/basis)를 사용자 화면에 함께 표시한다.
+공식 목록 기준 안내: "공식 홈페이지의 알레르겐 정보에 선택한 제한 성분이 기재되어 있지 않습니다."
+추가 안내: "실제 포함 여부와 교차접촉 가능성은 주문 전 매장에 한 번 더 확인해 주세요."
+Gemini 추정 mismatch에는 포함 확정이 아닌 AI 추정에 따른 추천 제외라는 별도 안내를 반환한다.
 자세한 범위와 우선순위는 dietary/README.md의 정책 v2를 따른다.
 메뉴 상세에 personalize=true를 지정하면 공통 judgement와 saved를 추가한다.
