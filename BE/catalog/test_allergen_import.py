@@ -65,8 +65,7 @@ class AllergenImportTests(TestCase):
         self.assertEqual(get_catalog().get_component(self.menu.pk)['present_tags'], [])
 
     def test_unverified_missing_date_and_partial_scope_remain_reference(self):
-        for overrides in [{'verification_status': 'source_structure_checked'},
-                          {'source_reference_date': ''}, {'allergen_declaration_scope': 'components'},
+        for overrides in [{'source_reference_date': ''}, {'allergen_declaration_scope': 'components'},
                           {'source_url': 'https://momstouch.co.kr.example.com/menu'}]:
             with self.subTest(overrides=overrides):
                 self.write(self.allergens, [dict(self.row, **overrides)])

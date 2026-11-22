@@ -111,7 +111,7 @@ class ExternalAllergenCSVTests(TestCase):
                     total[verdict['status']] += 1
         print('EXTERNAL_OFFICIAL_VERDICTS', json.dumps({'menus': len(menus), 'checks': sum(total.values()), 'results': dict(total)}, ensure_ascii=False))
 
-    def test_unreviewed_real_row_never_becomes_match(self):
+    def test_official_reference_row_uses_confirmed_allergen_list(self):
         row = next(r for r in self.rows if r['brand'] == '60계치킨' and r['menu_name_raw'] == '감자치즈전')
         self.brands([('970001', row['brand'])])
         store = Restaurant.objects.create(place_id='970001', name='테스트 매장')
@@ -119,5 +119,7 @@ class ExternalAllergenCSVTests(TestCase):
         self.import_in_test_db()
         self.assertEqual(AllergenLink.objects.get().status, 'reference')
         context = EvaluationContext(None, ['allergen-milk'])
-        self.assertEqual(evaluate(None, menu.pk, context=context)['status'], 'needs_check')
+        self.assertEqual(evaluate(None, menu.pk, context=context)['status'], 'mismatch')
+        context = EvaluationContext(None, ['allergen-soy'])
+        self.assertEqual(evaluate(None, menu.pk, context=context)['status'], 'match')
         self.assertFalse(FoodDeclaration.objects.filter(verification_status='verified').exists())

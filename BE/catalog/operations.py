@@ -8,6 +8,9 @@ from django.utils import timezone
 
 from .models import InformationReport, ReportEvent, Menu, Restaurant
 from .repository import normalize_brand
+from .franchise_sources import OFFICIAL_ALLERGEN_HOSTS
+from urllib.parse import urlparse
+from django.utils.dateparse import parse_datetime, parse_date
 
 
 def source_usable(source, now=None):
@@ -106,15 +109,36 @@ def declared_tags(items):
 
 
 def official_menu_allergens(menu):
-    # 검토된 프랜차이즈 공식 메뉴 목록의 알레르겐 범위
+    # 공식 프랜차이즈 자료의 상태와 무관한 알레르겐 근거
     empty = (set(), set(), {})
     link = getattr(menu, 'allergen_link', None)
-    if not link or link.status != 'verified_source' or not source_usable(link.source):
+    if not link or link.status not in {'verified_source', 'reference'}:
         return empty
     payload = link.payload
-    if (link.source.source_type != 'official' or not isinstance(payload, dict)
+    if not isinstance(payload, dict):
+        return empty
+    source = source_json(link.source)
+    if not source_usable(link.source) or link.source.source_type != 'official':
+        hosts = OFFICIAL_ALLERGEN_HOSTS.get(link.brand, [])
+        parsed = urlparse(link.source.url)
+        raw_date = payload.get('source_reference_date') or payload.get('collected_at') or ''
+        try:
+            checked = parse_datetime(raw_date)
+            if checked is None:
+                date = parse_date(raw_date)
+                checked = datetime.combine(date, datetime.min.time()) if date else None
+            if checked and timezone.is_naive(checked):
+                checked = timezone.make_aware(checked)
+        except (TypeError, ValueError):
+            checked = None
+        if (parsed.scheme not in {'http', 'https'} or parsed.hostname not in hosts
+                or payload.get('source_url') != link.source.url
+                or not checked or checked > timezone.now()
+                or (link.source.valid_until and link.source.valid_until < timezone.now())):
+            return empty
+        source = dict(source, source_type='official', checked_at=checked)
+    if (not isinstance(payload, dict)
             or payload.get('allergen_declaration_scope') != 'menu'
-            or payload.get('verification_status') not in {'manual_visual_checked', 'official_image_visual_checked'}
             or normalize_brand(payload.get('menu_name_raw', '')) != normalize_brand(menu.name)
             or normalize_brand(menu.restaurant.brand) != normalize_brand(link.brand)):
         return empty
@@ -131,7 +155,7 @@ def official_menu_allergens(menu):
     present.update({'고등어': 'mackerel', '게': 'crab', '새우': 'shrimp'}[t]
                    for t in tokens if t in {'고등어', '게', '새우'})
     present = expand_present_tags(present)
-    source = dict(source_json(link.source), interpretation='official_menu_allergen_list')
+    source = dict(source, interpretation='official_menu_allergen_list')
     return present, supported - present, {link.source_id: source}
 
 

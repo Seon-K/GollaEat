@@ -124,10 +124,37 @@ class AIJudgementTests(TestCase):
         link.save()
         link.status = 'reference'
         link.save()
+        self.assertEqual(self.verdict()['status'], 'match')
+        link.status = 'inactive'
+        link.save()
         self.assertEqual(self.verdict()['status'], 'needs_check')
         link.status = 'verified_source'
         link.save()
         self.source.valid_until = timezone.now() - timedelta(hours=1)
+        self.source.save()
+        self.assertEqual(self.verdict()['status'], 'needs_check')
+
+    def test_imported_reference_uses_official_payload_without_manual_review(self):
+        link = self.official('우유, 밀')
+        link.status = 'reference'
+        link.payload.update(source_url='https://www.lotteeatz.com/menu',
+            collected_at=(timezone.now() - timedelta(days=1)).isoformat(),
+            verification_status='auto_extracted_pending_review')
+        link.brand = '롯데리아'
+        link.save()
+        self.restaurant.brand = link.brand
+        self.restaurant.save()
+        self.source.source_type = 'reference'
+        self.source.url = link.payload['source_url']
+        self.source.checked_at = None
+        self.source.save()
+        self.profile.criteria.set(Criterion.objects.filter(code='allergen-milk'))
+        self.assertEqual(self.verdict()['status'], 'mismatch')
+        self.assertIn('milk', self.verdict()['reasons'][0]['verified_problem_ingredients'])
+        link.payload['allergens_contains_normalized'] = '밀, 대두'
+        link.save()
+        self.assertEqual(self.verdict()['status'], 'match')
+        self.source.url = 'https://www.lotteeatz.com.example.org/menu'
         self.source.save()
         self.assertEqual(self.verdict()['status'], 'needs_check')
 
