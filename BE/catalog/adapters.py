@@ -4,6 +4,7 @@ import re
 from django.conf import settings
 
 from .repository import CatalogDataError, CsvCatalogRepository
+from .operations import expand_present_tags
 
 
 class DietaryCatalog:
@@ -18,6 +19,9 @@ class DietaryCatalog:
         '돼지고기': 'pork', '복숭아': 'peach', '토마토': 'tomato',
         '아황산류': 'sulfites', '닭고기': 'chicken', '쇠고기': 'beef',
         '소고기': 'beef', '오징어': 'squid',
+        '견과류': 'nuts', '생선': 'fish', '갑각류': 'crustacean',
+        '기타 육류': 'other-meat', '치즈': 'cheese-butter', '버터': 'cheese-butter',
+        '치즈·버터': 'cheese-butter', '꿀': 'honey', '젤라틴': 'gelatin',
     }
 
     def get_component(self, component_id):
@@ -53,7 +57,7 @@ class DietaryCatalog:
                 if individual:
                     tags.add(individual)
         return {
-            'present_tags': sorted(tags), 'absent_tags': [], 'preference_tags': [],
+            'present_tags': sorted(expand_present_tags(tags)), 'absent_tags': [], 'preference_tags': [],
             'sources': [dict(source, id=component_id, title=menu['brand'] + ' ' + menu['menu_name'],
                              url=source.get('source_url'),
                              checked_at=source.get('source_reference_date'),
