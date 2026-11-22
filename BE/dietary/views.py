@@ -67,7 +67,7 @@ def restricted(request):
 
 @endpoint(['GET'])
 def criteria(request):
-    return JsonResponse({'criteria': list(Criterion.objects.filter(active=True).values('code', 'name', 'kind', 'category'))})
+    return JsonResponse({'criteria': list(Criterion.objects.filter(active=True).exclude(kind='preference').values('code', 'name', 'kind', 'category'))})
 
 
 @endpoint(['GET', 'PUT', 'PATCH'])
@@ -75,7 +75,7 @@ def profile(request):
     p = owner(request)
     if request.method != 'GET':
         codes = ids(request.payload['criteria'])
-        selected = list(Criterion.objects.filter(code__in=codes, active=True))
+        selected = list(Criterion.objects.filter(code__in=codes, active=True).exclude(kind='preference'))
         if len(selected) != len(set(codes)):
             raise ValueError('Unknown or inactive criterion')
         for c in selected:
@@ -87,7 +87,7 @@ def profile(request):
             p.criteria.set(selected)
             p.setup_completed = True
             p.save()
-    return JsonResponse({'criteria': list(p.criteria.values_list('code', flat=True)),
+    return JsonResponse({'criteria': list(p.criteria.exclude(kind='preference').values_list('code', flat=True)),
                          'setup_completed': p.setup_completed})
 
 

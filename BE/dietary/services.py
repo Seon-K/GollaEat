@@ -16,7 +16,7 @@ def validate_component(data):
         return None, True
     clean = {}
     invalid = False
-    for field in ['present_tags', 'absent_tags', 'preference_tags']:
+    for field in ['present_tags', 'absent_tags']:
         value = data.get(field, [])
         if not isinstance(value, list) or any(not isinstance(x, str) or not x.strip() for x in value):
             clean[field] = []
@@ -49,11 +49,11 @@ class EvaluationContext:
     def __init__(self, profile, codes=None):
         if codes is not None:
             identifiers(codes)
-            self.criteria = list(Criterion.objects.filter(code__in=codes, active=True).select_related('rule'))
+            self.criteria = list(Criterion.objects.filter(code__in=codes, active=True).exclude(kind='preference').select_related('rule'))
             if len(self.criteria) != len(set(codes)):
                 raise ValueError('Unknown or inactive criterion')
         else:
-            self.criteria = list(profile.criteria.select_related('rule').all())
+            self.criteria = list(profile.criteria.exclude(kind='preference').select_related('rule').all())
         self.rules = {}
         self.component_data = {}
         for criterion in self.criteria:
@@ -126,8 +126,8 @@ def evaluate(profile, component_id, modifications=None, *, criteria=None, contex
     status = aggregate(reasons)
     if unknown and status != 'mismatch':
         status = 'needs_check'
-    preferences = {c.code for c in criteria if c.kind == 'preference'}
-    score = len(preferences & set((data or {}).get('preference_tags', [])))
+    # 기존 응답 호환용 고정값, 음식 선호 기능 제외
+    score = 0
     messages = unknown_messages(sorted(set(unknown)), {c.code: c.name for c in criteria})
     return {'component_id': component_id, 'status': status, 'reasons': reasons,
             'problem_ingredients': sorted(problems), 'unknown_items': sorted(set(unknown)),
@@ -137,7 +137,7 @@ def evaluate(profile, component_id, modifications=None, *, criteria=None, contex
 
 
 def rank_menus(profile, menu_ids, *, criteria=None):
-    # 판정 상태 우선, 동일 상태 내 선호 반영
+    # 식이 판정 상태 및 메뉴 ID 기준 정렬
     identifiers(menu_ids)
     context = EvaluationContext(profile, criteria)
     context.prime(menu_ids)
