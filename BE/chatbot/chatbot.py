@@ -3,7 +3,7 @@ import argparse
 import json
 import os
 import re
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
@@ -29,6 +29,10 @@ def parse_demo(message):
         if terms:
             changes["ingredients"] = terms
     return changes or {"question": "예시: 순천향대 근처에서 우유 알레르기가 있는 내가 먹을 김밥 찾아줘"}
+
+
+class GeminiUnavailable(ValueError):
+    pass
 
 
 def parse_gemini(message, *, debug=False, context=None, response_data=None):
@@ -101,19 +105,40 @@ def parse_gemini(message, *, debug=False, context=None, response_data=None):
             {'question': message, 'result': response_data}, ensure_ascii=False)}]}]
         data['generationConfig']['responseSchema'] = {
             'type': 'OBJECT', 'properties': {'answer': {'type': 'STRING'}}, 'required': ['answer']}
-    model = quote(os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"), safe="")
-    request = Request(
-        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-        data=json.dumps(data).encode("utf-8"),
-        headers={"x-goog-api-key": key, "Content-Type": "application/json"},
-    )
+    primary_model = os.getenv("GEMINI_MODEL", "").strip() or "gemini-3.5-flash-lite"
+    fallback_model = "gemini-3.1-flash-lite"
+    body = json.dumps(data).encode("utf-8")
+
+    def generate(model, timeout):
+        request = Request(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{quote(model, safe='')}:generateContent",
+            data=body,
+            headers={"x-goog-api-key": key, "Content-Type": "application/json"},
+        )
+        with urlopen(request, timeout=timeout) as response:
+            return json.load(response)
+
     try:
-        with urlopen(request, timeout=20) as response:
-            payload = json.load(response)
+        try:
+            payload = generate(primary_model, timeout=10)
+        except HTTPError as error:
+            error.close()
+            if primary_model == fallback_model or not (error.code == 429 or 500 <= error.code < 600):
+                raise
+            payload = generate(fallback_model, timeout=5)
+        except (URLError, TimeoutError):
+            if primary_model == fallback_model:
+                raise
+            payload = generate(fallback_model, timeout=5)
     except HTTPError as error:
+        error.close()
+        if 500 <= error.code < 600:
+            raise GeminiUnavailable(f"Gemini HTTP {error.code}") from error
         if error.code == 429:
-            raise ValueError("Gemini 호출 한도에 도달했어요. 잠시 후 다시 시도해 주세요.") from error
+            raise GeminiUnavailable("Gemini 호출 한도에 도달했어요. 잠시 후 다시 시도해 주세요.") from error
         raise ValueError(f"Gemini 호출 실패 (HTTP {error.code})") from error
+    except (URLError, TimeoutError) as error:
+        raise GeminiUnavailable("Gemini에 연결하지 못했어요.") from error
     candidates = payload.get("candidates", [])
     if not candidates or candidates[0].get("finishReason") != "STOP":
         raise ValueError("Gemini가 질문 해석을 완료하지 못했어요.")

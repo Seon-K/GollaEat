@@ -8,7 +8,7 @@ from django.http import JsonResponse
 from dietary.views import endpoint, owner
 from .backend import BackendSearch, UnsupportedCriterion
 from .catalog_search import validate_location
-from .chatbot import chat, format_response, parse_gemini, response_summary
+from .chatbot import chat, format_response, parse_gemini, response_summary, GeminiUnavailable
 
 
 RADIUS_STEP_M = 1000
@@ -79,6 +79,12 @@ def chat_view(request):
             next_state, result = chat(message.strip(), state, parse=interpret, search=search)
         else:
             next_state, result = state, search(state)
+    except GeminiUnavailable:
+        logging.getLogger(__name__).warning("Gemini unavailable after interpretation retry")
+        return JsonResponse({
+            'error': 'gemini_unavailable',
+            'message': 'AI 응답을 일시적으로 받지 못했어요. 잠시 후 다시 시도해 주세요.',
+        }, status=503)
     except UnsupportedCriterion as error:
         return JsonResponse({'message': str(error), 'state': state,
                              'result': {'question': str(error)}})
