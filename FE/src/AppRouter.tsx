@@ -10,6 +10,7 @@ import OnboardingPage from "@/pages/OnboardingPage";
 import SetupAllergenPage from "@/pages/SetupAllergenPage";
 import SetupRestrictionPage from "@/pages/SetupRestrictionPage";
 import SetupConfirmPage from "@/pages/SetupConfirmPage";
+import MapPage from "@/pages/MapPage";
 import ExplorePage from "@/pages/ExplorePage";
 import MyPage from "@/pages/MyPage";
 import AiPage from "@/pages/AiPage";
@@ -40,6 +41,7 @@ export function AppRouter() {
         <Route path="/setup/allergen" element={<SetupAllergenPage />} />
         <Route path="/setup/restriction" element={<SetupRestrictionPage />} />
         <Route path="/setup/confirm" element={<SetupConfirmPage />} />
+        <Route path="/map" element={<MapPage />} />
         <Route path="/explore" element={<ExplorePage />} />
         <Route path="/my" element={<MyPage />} />
         <Route path="/ai" element={<AiPage />} />

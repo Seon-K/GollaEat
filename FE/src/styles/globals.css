@@ -43,6 +43,14 @@ textarea {
   font: inherit;
 }
 
+:where(button, a[href], [role="button"], [role="option"], summary, select, label[for], input[type="checkbox"], input[type="radio"]):not(:disabled):not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
+:where(button, input, select, [role="button"]):is(:disabled, [aria-disabled="true"]) {
+  cursor: not-allowed;
+}
+
 :focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
