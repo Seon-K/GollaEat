@@ -13,6 +13,7 @@ import type {
   ApiReview,
   ApiSession,
 } from "@/lib/api/types";
+import type { ApiRequestOptions } from "@/lib/api/client";
 
 export type DataMode = "api" | "mock";
 
@@ -44,16 +45,17 @@ export interface DataProvider {
   mode: DataMode;
   getSession(): Promise<ApiSession>;
   getDietaryCriteria(): Promise<ApiDietaryCriterion[]>;
-  getProfile(): Promise<ApiProfile>;
+  getProfile(options?: ApiRequestOptions): Promise<ApiProfile>;
   putProfile(criteria: string[]): Promise<ApiProfile>;
   getMenus(
     params?: MenuListParams,
+    options?: ApiRequestOptions,
   ): Promise<{ items: MenuListItemUi[]; pagination: PaginationUi }>;
-  getMenu(menuId: string): Promise<MenuDetailUi>;
+  getMenu(menuId: string, options?: ApiRequestOptions): Promise<MenuDetailUi>;
   getRestaurants(
     params?: RestaurantListParams,
   ): Promise<{ items: RestaurantUi[]; pagination: PaginationUi }>;
-  postJudgement(menuId: string): Promise<JudgementUi>;
+  postJudgement(menuId: string, options?: ApiRequestOptions): Promise<JudgementUi>;
   postRecommendationsRank(menuIds: string[]): Promise<JudgementUi[]>;
   postCommunication(
     components: Array<{ id: string; role: string }>,

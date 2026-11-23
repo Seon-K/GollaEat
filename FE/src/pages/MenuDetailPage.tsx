@@ -29,12 +29,12 @@ function MenuDetailContent() {
 
   const menuQuery = useQuery({
     queryKey: apiKeys.menu(id),
-    queryFn: () => getDataProvider().getMenu(id),
+    queryFn: ({ signal }) => getDataProvider().getMenu(id, { signal }),
   });
 
   const judgementQuery = useQuery({
     queryKey: apiKeys.judgement(id),
-    queryFn: () => getDataProvider().postJudgement(id),
+    queryFn: ({ signal }) => getDataProvider().postJudgement(id, { signal }),
   });
 
   const reviewsQuery = useQuery({
@@ -74,7 +74,7 @@ function MenuDetailContent() {
     return [...new Set([...judgement.unknownItems, ...fromReasons])];
   }, [judgement]);
 
-  if (menuQuery.isLoading || judgementQuery.isLoading) {
+  if (menuQuery.isLoading) {
     return (
       <main className="min-h-[100dvh] bg-background px-5 pt-6">
         <ApiLoading />
@@ -96,22 +96,11 @@ function MenuDetailContent() {
     );
   }
 
-  if (judgementQuery.isError || !judgement) {
-    return (
-      <main className="p-6">
-        <ApiErrorPanel
-          error={judgementQuery.error}
-          onRetry={() => void judgementQuery.refetch()}
-        />
-      </main>
-    );
-  }
-
-  const copy = VERDICT_COPY[judgement.status];
+  const copy = judgement ? VERDICT_COPY[judgement.status] : undefined;
   const panelDescription =
-    judgement.status === "check" && unknownBits.length > 0
+    judgement?.status === "check" && unknownBits.length > 0
       ? "재료 정보 없음 · 매장 확인 필요"
-      : copy.description;
+      : copy?.description;
 
   const mapUrl =
     typeof menu.lat === "number" && typeof menu.lng === "number"
@@ -152,15 +141,24 @@ function MenuDetailContent() {
           </p>
         </section>
 
-        <StatusBadge
+        {judgementQuery.isError ? (
+          <ApiErrorPanel error={judgementQuery.error} onRetry={() => void judgementQuery.refetch()} />
+        ) : judgement ? <StatusBadge
           status={judgement.status}
           variant="panel"
           description={panelDescription}
           note="교차접촉 및 조리 과정은 판단 범위에서 제외"
-        />
+        /> : <section className="rounded-2xl border border-[#eef1ef] bg-card p-4" role="status" aria-live="polite">
+          <p className="text-[14px] text-muted">식이 조건 확인 중…</p>
+        </section>}
 
         <section className="rounded-2xl border border-[#eef1ef] bg-card p-4">
           <h2 className="text-[15px] font-bold text-text">재료 · 알레르겐 정보</h2>
+          {!judgement || judgementQuery.isError ? (
+            <p className="mt-3 text-[14px] text-muted">
+              {judgementQuery.isError ? "판정 정보를 불러오지 못했습니다. 재료·알레르겐 확인이 필요합니다." : "식이 판정 정보를 확인하고 있습니다."}
+            </p>
+          ) : <>
           <p className="mt-3 text-[14px] leading-relaxed text-text">
             <span className="text-muted">확인 재료: </span>
             확인된 정보 기준
@@ -188,6 +186,7 @@ function MenuDetailContent() {
               ))}
             </ul>
           ) : null}
+          </>}
           <Link
             to={`/menu/${menu.id}/reasoning`}
             className="mt-3 flex items-center justify-between text-[14px] font-medium text-primary touch-target"

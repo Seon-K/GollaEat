@@ -4,6 +4,19 @@
  * - 404: { error: { code, message } }
  * - 403 CSRF: HTML 문자열일 수 있음
  */
+export class ApiRequestError extends Error {
+  constructor(readonly kind: "timeout" | "network") {
+    super(kind === "timeout"
+      ? "응답이 지연되고 있습니다. 잠시 후 다시 확인해 주세요."
+      : "네트워크 연결을 확인한 뒤 다시 시도해 주세요.");
+    this.name = "ApiRequestError";
+  }
+}
+
+export function isRequestCancelled(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
+}
+
 export class ApiError extends Error {
   readonly status: number;
   readonly body: unknown;

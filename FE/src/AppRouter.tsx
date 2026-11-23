@@ -19,6 +19,7 @@ import MenuInquiryPage from "@/pages/MenuInquiryPage";
 import MenuReportPage from "@/pages/MenuReportPage";
 import ShowStaffPage from "@/pages/ShowStaffPage";
 import DesignSystemPage from "@/pages/DesignSystemPage";
+import { SessionGate } from "@/components/SessionGate";
 
 function MenuPathRedirect({ suffix = "" }: { suffix?: string }) {
   const { id } = useParams();
@@ -34,6 +35,7 @@ function InquireRelativeRedirect() {
 export function AppRouter() {
   return (
     <BrowserRouter>
+      <SessionGate>
       <Routes>
         <Route path="/" element={<SplashPage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
@@ -73,6 +75,7 @@ export function AppRouter() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </SessionGate>
     </BrowserRouter>
   );
 }
