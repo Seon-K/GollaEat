@@ -29,6 +29,11 @@ export class ApiError extends Error {
   }
 
   static defaultMessage(status: number, body: unknown): string {
+    if (status === 503) {
+      const message = (body as { message?: unknown })?.message;
+      if (typeof message === "string" && message.trim()) return message;
+      return "서버가 일시적으로 응답하지 못했어요. 잠시 후 다시 시도해 주세요.";
+    }
     if (status === 400) {
       const e = (body as { error?: unknown })?.error;
       if (typeof e === "string") return e;

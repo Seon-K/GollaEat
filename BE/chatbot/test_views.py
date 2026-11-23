@@ -1,11 +1,64 @@
 import json
 from unittest.mock import patch
 from django.test import Client, TestCase
+from chatbot.chatbot import GeminiUnavailable
 
 
 class ChatApiTests(TestCase):
+    @patch('chatbot.views.parse_gemini', side_effect=GeminiUnavailable('Gemini HTTP 503'))
+    def test_provider_failure_keeps_conversation(self, parse):
+        client = Client()
+        session = client.session
+        session['chat_state'] = {'radius_m': 1000, 'place': 'school', 'allergens': ['우유']}
+        session['chat_history'] = [{'user': 'previous', 'assistant': 'previous'}]
+        session.save()
+        before = dict(client.session)
+        response = self.send(client, {'message': '점심 추천'})
+        self.assertEqual(response.status_code, 503)
+        self.assertIn('같은 질문', response.json()['message'])
+        self.assertEqual(client.session['chat_state'], before['chat_state'])
+        self.assertEqual(client.session['chat_history'], before['chat_history'])
+
     def send(self, client, body):
         return client.post('/api/chat', json.dumps(body), content_type='application/json')
+
+    @patch('chatbot.views.BackendSearch.__call__')
+    @patch('chatbot.views.parse_gemini')
+    def test_search_ignores_invented_menu_id_and_continues_place_selection(self, parse, search):
+        location = {'lat': 36.77, 'lng': 126.93}
+        candidates = {'question': '검색 기준 장소를 선택해 주세요.',
+                      'place_candidates': [{'name': '순천향대학교', 'location': location}]}
+        cards = {'matched': [], 'needs_check': []}
+        search.side_effect = [candidates, cards]
+        for intent in (None, 'search'):
+            with self.subTest(intent=intent):
+                change = {'place': '순천향대', 'allergens': ['우유'], 'menu_id': 'invented'}
+                if intent:
+                    change['intent'] = intent
+                parse.return_value = change
+                search.side_effect = [candidates, cards]
+                client = Client()
+                response = self.send(client, {'message': '순천향대 근처 점심 추천해줘'})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()['result']['place_candidates'], candidates['place_candidates'])
+                self.assertNotIn('menu_id', response.json()['state'])
+                self.assertEqual(response.json()['state']['place'], '순천향대')
+                parse.reset_mock()
+                response = self.send(client, {'message': '', 'location': location})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()['result']['needs_check'], [])
+                self.assertEqual(search.call_args.args[0]['location'], location)
+                self.assertEqual(search.call_args.args[0]['allergens'], ['우유'])
+                parse.assert_not_called()
+
+    @patch('chatbot.views.BackendSearch.__call__')
+    @patch('chatbot.views.parse_gemini')
+    def test_explanation_rejects_invented_menu_id(self, parse, search):
+        parse.return_value = {'intent': 'explain', 'menu_id': 'invented'}
+        response = self.send(Client(), {'message': '이 메뉴의 재료 알려줘'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['result']['question'], '확인할 매장명과 메뉴명을 알려주세요.')
+        search.assert_not_called()
 
     @patch('chatbot.views.parse_gemini')
     def test_followup_reset_and_isolation(self, parse):
