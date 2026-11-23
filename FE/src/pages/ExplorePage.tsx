@@ -18,14 +18,21 @@ import { MenuCard, type MenuCardModel } from "@/components/MenuCard";
 import { NearbyMap } from "@/components/NearbyMap";
 import { ASAN_ORIGIN } from "@/data/mock";
 import { useFavorites } from "@/hooks/useFavoriteToggle";
+import { useGeolocation, type UserLocation } from "@/hooks/useGeolocation";
 import { CATEGORY_FILTER_LABEL } from "@/lib/api/criteriaMap";
 import { apiKeys } from "@/lib/api/keys";
 import { getDataProvider } from "@/lib/api/providers";
 import { formatConditionBanner } from "@/lib/conditionBanner";
+import { haversineKm } from "@/lib/geo";
 import { useProfileStore } from "@/store/profileStore";
 import type { CategoryFilter, JudgementStatus, SortOption } from "@/types";
 
-const LOCATIONS = ["충남 아산시"] as const;
+const ASAN_LOCATION: UserLocation = {
+  lat: ASAN_ORIGIN.lat,
+  lng: ASAN_ORIGIN.lng,
+  label: ASAN_ORIGIN.label ?? "충남 아산시",
+  isGps: false,
+};
 
 const SORT_OPTIONS: { id: SortOption; label: string }[] = [
   { id: "match", label: "일치순" },
@@ -54,14 +61,17 @@ export default function ExplorePage() {
   const allergens = useProfileStore((s) => s.allergens);
   const restrictions = useProfileStore((s) => s.restrictions);
   const fav = useFavorites();
+  const geo = useGeolocation();
 
-  const [location, setLocation] = useState<(typeof LOCATIONS)[number]>(
-    "충남 아산시",
-  );
+  /** null이면 GPS(또는 폴백) 사용, 수동 선택 시 덮어씀 */
+  const [manualOrigin, setManualOrigin] = useState<UserLocation | null>(null);
   const [locationOpen, setLocationOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortOption>("match");
   const [filter, setFilter] = useState<CategoryFilter>("all");
+
+  const origin = manualOrigin ?? geo.location;
+  const locationReady = geo.status !== "pending" || manualOrigin != null;
 
   const conditionBanner = formatConditionBanner(allergens, restrictions);
 
@@ -69,18 +79,19 @@ export default function ExplorePage() {
     queryKey: apiKeys.menus({
       q: query.trim() || undefined,
       personalize: true,
-      lat: ASAN_ORIGIN.lat,
-      lng: ASAN_ORIGIN.lng,
+      lat: origin.lat,
+      lng: origin.lng,
       limit: 40,
     }),
     queryFn: () =>
       getDataProvider().getMenus({
         q: query.trim() || undefined,
         personalize: true,
-        lat: ASAN_ORIGIN.lat,
-        lng: ASAN_ORIGIN.lng,
+        lat: origin.lat,
+        lng: origin.lng,
         limit: 40,
       }),
+    enabled: locationReady,
   });
 
   const sortTriggerLabel =
@@ -88,11 +99,25 @@ export default function ExplorePage() {
       ? "추천순"
       : (SORT_OPTIONS.find((o) => o.id === sort)?.label ?? "추천순");
 
+  const itemsWithDistance = useMemo(() => {
+    const items = menusQuery.data?.items ?? [];
+    return items.map((m) => {
+      if (m.distanceKm != null) return m;
+      if (typeof m.lat === "number" && typeof m.lng === "number") {
+        return {
+          ...m,
+          distanceKm: haversineKm(origin, { lat: m.lat, lng: m.lng }),
+        };
+      }
+      return m;
+    });
+  }, [menusQuery.data?.items, origin]);
+
   const mapMarkers = useMemo(() => {
     const seen = new Set<string>();
     const markers: { id: string; name: string; lat: number; lng: number }[] =
       [];
-    for (const m of menusQuery.data?.items ?? []) {
+    for (const m of itemsWithDistance) {
       if (typeof m.lat !== "number" || typeof m.lng !== "number") continue;
       const key = m.restaurantId || `${m.lat},${m.lng}`;
       if (seen.has(key)) continue;
@@ -105,10 +130,10 @@ export default function ExplorePage() {
       });
     }
     return markers;
-  }, [menusQuery.data?.items]);
+  }, [itemsWithDistance]);
 
   const cards: MenuCardModel[] = useMemo(() => {
-    let list = [...(menusQuery.data?.items ?? [])];
+    let list = [...itemsWithDistance];
     if (filter !== "all") {
       const label = CATEGORY_FILTER_LABEL[filter];
       if (label) {
@@ -136,7 +161,16 @@ export default function ExplorePage() {
       status: m.judgement?.status ?? "check",
       saved: fav.isSaved(m.id) || m.saved,
     }));
-  }, [menusQuery.data?.items, filter, sort, fav]);
+  }, [itemsWithDistance, filter, sort, fav]);
+
+  const locationChoices: UserLocation[] = useMemo(() => {
+    const list: UserLocation[] = [];
+    if (geo.location.isGps) {
+      list.push(geo.location);
+    }
+    list.push(ASAN_LOCATION);
+    return list;
+  }, [geo.location]);
 
   return (
     <main className="min-h-[100dvh] bg-background pb-24">
@@ -147,7 +181,9 @@ export default function ExplorePage() {
           className="inline-flex items-center gap-1 text-[14px] font-semibold text-primary touch-target"
         >
           <MapPin className="size-4" strokeWidth={2.4} />
-          {location}
+          {geo.status === "pending" && !manualOrigin
+            ? "위치 확인 중…"
+            : origin.label}
           <ChevronDown className="size-4" />
         </button>
 
@@ -176,7 +212,11 @@ export default function ExplorePage() {
 
         <section className="mt-6">
           <h2 className="mb-3 text-[16px] font-bold text-text">주변 매장 지도</h2>
-          <NearbyMap markers={mapMarkers} center={ASAN_ORIGIN} />
+          <NearbyMap
+            markers={mapMarkers}
+            center={{ lat: origin.lat, lng: origin.lng }}
+            showUserLocation={origin.isGps}
+          />
         </section>
 
         <section className="mt-6">
@@ -200,7 +240,7 @@ export default function ExplorePage() {
             />
           </div>
 
-          {menusQuery.isLoading ? <ApiLoading /> : null}
+          {!locationReady || menusQuery.isLoading ? <ApiLoading /> : null}
           {menusQuery.isError ? (
             <ApiErrorPanel
               error={menusQuery.error}
@@ -208,7 +248,7 @@ export default function ExplorePage() {
             />
           ) : null}
 
-          {!menusQuery.isLoading && !menusQuery.isError ? (
+          {locationReady && !menusQuery.isLoading && !menusQuery.isError ? (
             <div className="space-y-3">
               {cards.map((item) => (
                 <MenuCard
@@ -244,24 +284,54 @@ export default function ExplorePage() {
         title="지역 선택"
       >
         <div className="space-y-1 pb-2">
-          {LOCATIONS.map((loc) => (
+          {locationChoices.map((loc) => {
+            const selected =
+              origin.label === loc.label &&
+              Math.abs(origin.lat - loc.lat) < 1e-6 &&
+              Math.abs(origin.lng - loc.lng) < 1e-6;
+            return (
+              <button
+                key={loc.label}
+                type="button"
+                onClick={() => {
+                  if (loc.isGps) {
+                    setManualOrigin(null);
+                    geo.refresh();
+                  } else {
+                    setManualOrigin(loc);
+                  }
+                  setLocationOpen(false);
+                }}
+                className={`flex w-full items-center gap-2 rounded-xl px-3 py-3 text-left text-[15px] touch-target ${
+                  selected
+                    ? "bg-primary-light font-semibold text-primary"
+                    : "text-text"
+                }`}
+              >
+                <MapPin className="size-4 shrink-0" />
+                {loc.label}
+              </button>
+            );
+          })}
+          {geo.status === "denied" || geo.status === "unavailable" ? (
+            <p className="px-3 pt-2 text-[12px] text-muted">
+              위치 권한이 없어 아산 기준으로 안내합니다. 브라우저에서 위치
+              허용 후 「현재 위치」를 다시 선택해 주세요.
+            </p>
+          ) : null}
+          {geo.status !== "ready" && geo.status !== "pending" ? (
             <button
-              key={loc}
               type="button"
               onClick={() => {
-                setLocation(loc);
+                setManualOrigin(null);
+                geo.refresh();
                 setLocationOpen(false);
               }}
-              className={`flex w-full items-center gap-2 rounded-xl px-3 py-3 text-left text-[15px] touch-target ${
-                location === loc
-                  ? "bg-primary-light font-semibold text-primary"
-                  : "text-text"
-              }`}
+              className="mt-2 flex w-full items-center justify-center rounded-xl bg-primary-light px-3 py-3 text-[14px] font-semibold text-primary touch-target"
             >
-              <MapPin className="size-4 shrink-0" />
-              {loc}
+              현재 위치 다시 받기
             </button>
-          ))}
+          ) : null}
         </div>
       </BottomSheet>
     </main>

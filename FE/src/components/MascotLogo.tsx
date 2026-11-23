@@ -14,12 +14,12 @@ export function MascotLogo({
   alt = "골라잇",
 }: MascotLogoProps) {
   const img = (
-    // eslint-disable-next-line @next/next/no-img-element
     <img
       src={MASCOT_SRC}
       alt={alt}
       className={framed ? "size-[72%] object-contain" : className}
       draggable={false}
+      decoding="async"
     />
   );
 
