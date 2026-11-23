@@ -29,6 +29,7 @@ const PANEL_TITLE: Record<VerdictStatus, string> = {
 export type StatusBadgeVariant = "pill" | "panel";
 
 interface StatusBadgeProps {
+  title?: string;
   status: VerdictStatus;
   /** pill: 리스트용 작은 배지 / panel: p16 큰 카드(제목+설명) */
   variant?: StatusBadgeVariant;
@@ -40,13 +41,15 @@ interface StatusBadgeProps {
 
 export function StatusBadge({
   status,
+  title: customTitle,
   variant = "pill",
   description,
   note,
   className = "",
 }: StatusBadgeProps) {
   const Icon = ICONS[status];
-  const { title, description: defaultDesc } = VERDICT_COPY[status];
+  const { title: defaultTitle, description: defaultDesc } = VERDICT_COPY[status];
+  const title = customTitle ?? defaultTitle;
 
   if (variant === "panel") {
     return (
