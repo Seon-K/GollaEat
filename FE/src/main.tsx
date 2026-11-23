@@ -7,10 +7,10 @@ import "@/styles/globals.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <AppProviders>
-      <PhoneFrame>
+    <PhoneFrame>
+      <AppProviders>
         <AppRouter />
-      </PhoneFrame>
-    </AppProviders>
+      </AppProviders>
+    </PhoneFrame>
   </StrictMode>,
 );

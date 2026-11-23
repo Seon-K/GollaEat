@@ -1,77 +1,39 @@
-import { useCallback, useEffect, useState } from "react";
-import { ASAN_ORIGIN } from "@/data/mock";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-export type GeoStatus = "pending" | "ready" | "denied" | "unavailable";
+export type GeoPoint = { lat: number; lng: number };
+type GeoFailure = "denied" | "timeout" | "error" | "unsupported";
+type GeoStatus = "idle" | "loading" | "success" | GeoFailure;
 
-export interface UserLocation {
-  lat: number;
-  lng: number;
-  label: string;
-  /** GPS로 받은 실제 현재 위치인지 */
-  isGps: boolean;
+export class LocationError extends Error {
+  constructor(public status: GeoFailure) { super(status); }
 }
 
-interface UseGeolocationResult {
-  location: UserLocation;
-  status: GeoStatus;
-  refresh: () => void;
+export function locate(geolocation?: Pick<Geolocation, "getCurrentPosition">): Promise<GeoPoint> {
+  return new Promise((resolve, reject) => {
+    if (!geolocation) { reject(new LocationError("unsupported")); return; }
+    geolocation.getCurrentPosition(({ coords }) => resolve({ lat: coords.latitude, lng: coords.longitude }),
+      (error) => reject(new LocationError(error.code === 1 ? "denied" : error.code === 3 ? "timeout" : "error")),
+      { timeout: 10000, maximumAge: 60000, enableHighAccuracy: false });
+  });
 }
 
-const FALLBACK: UserLocation = {
-  lat: ASAN_ORIGIN.lat,
-  lng: ASAN_ORIGIN.lng,
-  label: ASAN_ORIGIN.label ?? "충남 아산시",
-  isGps: false,
-};
-
-/**
- * 브라우저 Geolocation → 실패 시 아산 폴백.
- * 탐색/거리 API 기준점으로 사용.
- */
-export function useGeolocation(): UseGeolocationResult {
-  const [location, setLocation] = useState<UserLocation>(FALLBACK);
-  const [status, setStatus] = useState<GeoStatus>("pending");
-  const [nonce, setNonce] = useState(0);
-
-  const refresh = useCallback(() => setNonce((n) => n + 1), []);
-
-  useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setLocation(FALLBACK);
-      setStatus("unavailable");
-      return;
-    }
-
-    setStatus("pending");
-    let cancelled = false;
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        if (cancelled) return;
-        setLocation({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          label: "현재 위치",
-          isGps: true,
-        });
-        setStatus("ready");
-      },
-      () => {
-        if (cancelled) return;
-        setLocation(FALLBACK);
-        setStatus("denied");
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 12_000,
-        maximumAge: 60_000,
-      },
-    );
-
-    return () => {
-      cancelled = true;
-    };
-  }, [nonce]);
-
-  return { location, status, refresh };
+export function useGeolocation({ autoRequest = false } = {}) {
+  const [status, setStatus] = useState<GeoStatus>("idle");
+  const [position, setPosition] = useState<GeoPoint | null>(null);
+  const generation = useRef(0);
+  useEffect(() => () => { generation.current++; }, []);
+  const request = useCallback(() => {
+    const id = ++generation.current;
+    setStatus("loading");
+    void locate(navigator.geolocation).then((point) => {
+      if (id !== generation.current) return;
+      setPosition(point);
+      setStatus("success");
+    }).catch((error: unknown) => {
+      if (id !== generation.current) return;
+      setStatus(error instanceof LocationError ? error.status : "error");
+    });
+  }, []);
+  useEffect(() => { if (autoRequest) request(); }, [autoRequest, request]);
+  return { status, position, request };
 }

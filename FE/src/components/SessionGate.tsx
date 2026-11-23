@@ -1,15 +1,16 @@
-import { createContext, useContext, useCallback, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext } from "react";
 import { useLocation } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { ProfileCacheSync } from "./AppProviders";
 import { apiKeys } from "@/lib/api/keys";
-import { ensureSession } from "@/lib/api/client";
+import { LoadingSkeleton } from "./LoadingSkeleton";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { getBootstrapProfile, onSessionIdentityChange } from "@/lib/api/client";
+import { useQueryClient } from "@tanstack/react-query";
 import { getDataMode, getDataProvider } from "@/lib/api/providers";
 import { useProfileStore } from "@/store/profileStore";
 import { ApiError } from "@/lib/api/errors";
 
-const SessionState = createContext<{ ready: boolean; error: string | null; retry: () => void }>({
-  ready: false, error: null, retry: () => {},
-});
+const SessionState = createContext({ ready: false, error: null as string | null, retry: () => {} });
 export const useSessionState = () => useContext(SessionState);
 
 /**
@@ -17,26 +18,32 @@ export const useSessionState = () => useContext(SessionState);
  * mock 모드는 네트워크 없이 통과.
  */
 export function SessionGate({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
+  const queryClient = useQueryClient();
+  const bootVersion = useRef(0);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const hydrateFromApi = useProfileStore((s) => s.hydrateFromApi);
-  const qc = useQueryClient();
-  const { pathname } = useLocation();
 
   const boot = useCallback(async () => {
+    const version = ++bootVersion.current;
     setError(null);
     try {
       if (getDataMode() === "mock") {
         setReady(true);
         return;
       }
-      await ensureSession();
-      const profile = await qc.fetchQuery({ queryKey: apiKeys.profile(),
-        queryFn: ({ signal }) => getDataProvider().getProfile({ signal }), retry: false });
+      const profile = await queryClient.fetchQuery({
+        queryKey: apiKeys.profile(),
+        queryFn: async ({ signal }) => (await getBootstrapProfile()) ?? getDataProvider().getProfile({ signal }),
+        staleTime: 0, retry: false,
+      });
+      if (version !== bootVersion.current) return;
       hydrateFromApi(profile);
       setReady(true);
     } catch (e) {
+      if (version !== bootVersion.current) return;
       setReady(false);
       setError(
         e instanceof ApiError
@@ -46,15 +53,23 @@ export function SessionGate({ children }: { children: ReactNode }) {
             : "세션을 시작하지 못했습니다.",
       );
     }
-  }, [hydrateFromApi, qc]);
+  }, [hydrateFromApi, queryClient]);
 
   useEffect(() => {
     void boot();
   }, [boot, attempt]);
 
+  useEffect(() => onSessionIdentityChange(() => {
+    bootVersion.current++;
+    setReady(false);
+    void queryClient.cancelQueries().then(() => {
+      queryClient.clear();
+      setAttempt((value) => value + 1);
+    });
+  }), [queryClient]);
+
   const state = { ready, error, retry: () => setAttempt((n) => n + 1) };
-  // Only the non-personalized introduction can render before server hydration.
-  if (pathname === "/") return <SessionState.Provider value={state}>{children}</SessionState.Provider>;
+  if (pathname === "/") return <SessionState.Provider value={state}>{ready && <ProfileCacheSync />}{children}</SessionState.Provider>;
 
   if (error) {
     return (
@@ -74,11 +89,11 @@ export function SessionGate({ children }: { children: ReactNode }) {
 
   if (!ready) {
     return (
-      <main className="flex min-h-[100dvh] items-center justify-center bg-background">
-        <p className="text-[14px] text-muted">준비 중…</p>
+      <main className="min-h-[100dvh] bg-background px-5 pb-24 pt-6">
+        <LoadingSkeleton variant="page" />
       </main>
     );
   }
 
-  return <SessionState.Provider value={state}>{children}</SessionState.Provider>;
+  return <SessionState.Provider value={state}><ProfileCacheSync />{children}</SessionState.Provider>;
 }

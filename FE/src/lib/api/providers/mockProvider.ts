@@ -32,6 +32,7 @@ const mockFavorites = new Map<number, string>();
 let favSeq = 1;
 const mockReviews: ApiReview[] = [];
 let reviewSeq = 1;
+let reportSeq = 1;
 
 function profileFromCriteria(codes: string[]): DietProfile {
   const allergens: DietProfile["allergens"] = [];
@@ -187,6 +188,7 @@ export const mockProvider: DataProvider = {
       label: "mock",
     };
     let list = [...MENUS];
+      if (params.restaurant_id) list = list.filter((menu) => menu.storeId === params.restaurant_id);
     if (params.q) {
       const q = params.q;
       list = list.filter((m) => m.name.includes(q));
@@ -309,13 +311,39 @@ export const mockProvider: DataProvider = {
     mockFavorites.delete(id);
   },
 
+  async createReport(input) {
+    return { ...input, menu_id: input.menu_id ?? null, report_id: reportSeq++, restaurant_id: input.restaurant_id ?? null, status: "pending", created_at: new Date().toISOString(), reviewed_at: null };
+  },
+
   async getReviews(menuId) {
     return mockReviews.filter((r) => r.menu_id === menuId);
+  },
+
+  async updateReview(id, body) {
+    const review = mockReviews.find((item) => item.id === id && item.is_mine);
+    if (!review) throw new Error("리뷰를 찾을 수 없습니다.");
+    if (!body.trim() || body.trim().length > 5000) throw new Error("리뷰는 1~5000자여야 합니다.");
+    review.body = body.trim(); review.updated_at = new Date().toISOString();
+    return { ...review };
+  },
+  async deleteReview(id) {
+    const index = mockReviews.findIndex((item) => item.id === id && item.is_mine);
+    if (index < 0) throw new Error("리뷰를 찾을 수 없습니다.");
+    mockReviews.splice(index, 1);
+  },
+
+  async getMyReviews(page = 1) {
+    const own = mockReviews.filter((review) => review.is_mine);
+    const totalPages = Math.ceil(own.length / 20);
+    const items = own.slice((page - 1) * 20, page * 20);
+    return { items, pagination: { page, limit: 20, count: items.length, total: own.length, totalPages,
+      nextPage: page < totalPages ? page + 1 : null, previousPage: page > 1 ? page - 1 : null } };
   },
 
   async createReview(input) {
     const row: ApiReview = {
       id: reviewSeq++,
+      is_mine: true,
       menu_id: input.menuId,
       body: input.body,
       disclosed_conditions: (input.discloseConditions ?? []).map((code) => ({

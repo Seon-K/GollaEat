@@ -1,8 +1,24 @@
+import type { ApiProfile } from "./types";
 import { ApiError } from "@/lib/api/errors";
 import { controlledRequest, type ApiRequestOptions } from "@/lib/api/requestControl";
 export type { ApiRequestOptions } from "@/lib/api/requestControl";
 
 type JsonBody = unknown;
+
+let sessionProfile: ApiProfile | null = null;
+let sessionIdentity: string | null = null;
+const identityListeners = new Set<() => void>();
+export function onSessionIdentityChange(listener: () => void): () => void {
+  identityListeners.add(listener);
+  return () => { identityListeners.delete(listener); };
+}
+function recordIdentity(body: unknown, response?: Response) {
+  const identity = response?.headers.get("X-GollaEat-Session") || (body as { cache_identity?: string } | null)?.cache_identity;
+  if (!identity) return;
+  const changed = sessionIdentity !== null && identity !== sessionIdentity;
+  sessionIdentity = identity;
+  if (changed) { sessionProfile = null; identityListeners.forEach((listener) => listener()); }
+}
 
 let csrfToken: string | null = null;
 let sessionInitPromise: Promise<void> | null = null;
@@ -15,6 +31,8 @@ export function getCsrfToken(): string | null {
 
 /** 테스트용 */
 export function __resetApiClientForTests(): void {
+  sessionIdentity = null;
+  sessionProfile = null;
   csrfToken = null;
   sessionInitPromise = null;
 }
@@ -62,6 +80,9 @@ export async function ensureSession(): Promise<void> {
         throw new ApiError(500, body, "csrf_token missing in /api/session");
       }
       csrfToken = token;
+      recordIdentity(body, res);
+      const profile = (body as { profile?: ApiProfile }).profile;
+      sessionProfile = profile && Array.isArray(profile.criteria) ? profile : null;
     });
     sessionInitPromise = init;
     void init.catch(() => {
@@ -69,6 +90,11 @@ export async function ensureSession(): Promise<void> {
     });
   }
   await sessionInitPromise;
+}
+
+export async function getBootstrapProfile(): Promise<ApiProfile | null> {
+  await ensureSession();
+  return sessionProfile;
 }
 
 export type ApiQuery = Record<
@@ -128,6 +154,7 @@ async function sendRequest<T>(
 
   const body = await parseBody(res);
   signal.throwIfAborted();
+  recordIdentity(body, res);
 
   if (res.status === 403 && MUTATING.has(method) && !options._retried) {
     csrfToken = null;
@@ -146,6 +173,10 @@ async function sendRequest<T>(
     if (token) csrfToken = token;
   }
 
+  if (path === "/api/profile") {
+    const profile = body as ApiProfile;
+    if (Array.isArray(profile?.criteria)) sessionProfile = profile;
+  }
   return body as T;
 }
 

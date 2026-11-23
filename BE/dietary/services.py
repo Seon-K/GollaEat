@@ -5,6 +5,8 @@ from .messages import unknown_messages, judgement_guidance
 from .catalog_info import component_summaries
 from .order_validation import validate_selection
 from .analysis_reference import ai_evidence
+from copy import deepcopy
+from . import judgement_cache
 
 PRIORITY = {'match': 0, 'needs_check': 1, 'mismatch': 2}
 
@@ -58,6 +60,10 @@ class EvaluationContext:
             self.criteria = list(profile.criteria.exclude(kind='preference').select_related('rule').all())
         self.rules = {}
         self.component_data = {}
+        self.prepared_components = {}
+        self.cached_judgements = {}
+        self.judgement_cache_keys = {}
+        self.pending_judgements = {}
         for criterion in self.criteria:
             rule = getattr(criterion, 'rule', None)
             if rule and rule.enabled and rule.source:
@@ -67,12 +73,27 @@ class EvaluationContext:
                     raise ValueError('Unsupported criterion: ' + criterion.code)
 
     def prime(self, component_ids):
+        if not component_ids:
+            return
         # 일괄 조회 지원 어댑터의 요청 단위 성분 스냅샷
-        batch = getattr(get_catalog(), 'get_components', None)
+        catalog = get_catalog()
+        from django.conf import settings
+        from catalog.adapters import DietaryCatalog
+        if settings.CATALOG_USE_DB and isinstance(catalog, DietaryCatalog):
+            self.judgement_cache_keys.update(judgement_cache.cache_keys(self, component_ids))
+            self.cached_judgements.update(judgement_cache.read_many(self.judgement_cache_keys))
+        component_ids = [mid for mid in component_ids if mid not in self.cached_judgements]
+        if not component_ids:
+            return
+        batch = getattr(catalog, 'get_components', None)
         if callable(batch):
             data = batch(component_ids)
             if isinstance(data, dict):
                 self.component_data.update(data)
+
+    def flush(self):
+        judgement_cache.write_many(self.pending_judgements)
+        self.pending_judgements.clear()
 
 
 def resolve_criteria(profile, codes):
@@ -84,12 +105,20 @@ def evaluate(profile, component_id, modifications=None, *, criteria=None, contex
     if modifications is not None:
         identifiers(modifications)
     context = context if context is not None else EvaluationContext(profile, criteria)
+    if modifications is None and component_id in context.cached_judgements:
+        return deepcopy(context.cached_judgements[component_id])
     criteria = context.criteria
-    data = (context.component_data[component_id] if component_id in context.component_data
-            else get_catalog().get_component(component_id))
-    data, invalid_data = validate_component(data)
-    inferred, invalid_analysis = ai_evidence((data or {}).get('analysis_reference'), component_id)
-    invalid_data = invalid_data or invalid_analysis
+    prepared = getattr(context, 'prepared_components', None)
+    if prepared is not None and component_id in prepared:
+        data, invalid_data, inferred = prepared[component_id]
+    else:
+        data = (context.component_data[component_id] if component_id in context.component_data
+                else get_catalog().get_component(component_id))
+        data, invalid_data = validate_component(data)
+        inferred, invalid_analysis = ai_evidence((data or {}).get('analysis_reference'), component_id)
+        invalid_data = invalid_data or invalid_analysis
+        if prepared is not None:
+            prepared[component_id] = (data, invalid_data, inferred)
     reasons = []
     unknown = []
     problems = set()
@@ -142,13 +171,16 @@ def evaluate(profile, component_id, modifications=None, *, criteria=None, contex
     # 기존 응답 호환용 고정값, 음식 선호 기능 제외
     score = 0
     messages = unknown_messages(sorted(set(unknown)), {c.code: c.name for c in criteria})
-    return {'component_id': component_id, 'status': status, 'reasons': reasons,
+    result = {'component_id': component_id, 'status': status, 'reasons': reasons,
             'guidance': judgement_guidance(status, reasons, bool(criteria)),
             'problem_ingredients': sorted(problems), 'unknown_items': sorted(set(unknown)),
             'unknown_messages': messages,
             'ai_evidence': list(relevant_ai.values()),
             'sources': (data or {}).get('sources', []), 'preference_score': score,
             'sort_key': [PRIORITY[status], -score, component_id]}
+    if modifications is None and component_id in context.judgement_cache_keys:
+        context.pending_judgements[context.judgement_cache_keys[component_id]] = judgement_cache.entry(result)
+    return result
 
 
 def rank_menus(profile, menu_ids, *, criteria=None):
@@ -156,7 +188,9 @@ def rank_menus(profile, menu_ids, *, criteria=None):
     identifiers(menu_ids)
     context = EvaluationContext(profile, criteria)
     context.prime(menu_ids)
-    return sorted((evaluate(profile, mid, context=context) for mid in menu_ids), key=lambda r: r['sort_key'])
+    results = sorted((evaluate(profile, mid, context=context) for mid in menu_ids), key=lambda r: r['sort_key'])
+    context.flush()
+    return results
 
 
 def check_order(profile, components, *, context=None):

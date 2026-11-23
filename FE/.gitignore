@@ -1,13 +1,11 @@
 node_modules
 dist
-.next
 .DS_Store
 *.pem
 .cursor/
 npm-debug.log*
 .env*
 !.env.example
-.vercel
 *.tsbuildinfo
 /*.pdf
 body1.json

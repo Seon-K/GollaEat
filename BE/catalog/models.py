@@ -5,6 +5,31 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
+from .index_json import EvaluationSnapshotEncoder, EvaluationSnapshotDecoder
+
+
+class MenuDietaryState(models.Model):
+    """Derived search document. Invalidated in the database, including bulk SQL."""
+    menu = models.OneToOneField('Menu', primary_key=True, on_delete=models.CASCADE, related_name='dietary_state')
+    evaluation_data = models.JSONField(null=True, blank=True, encoder=EvaluationSnapshotEncoder, decoder=EvaluationSnapshotDecoder)
+    revision = models.PositiveBigIntegerField(default=1)
+    engine_version = models.PositiveIntegerField(default=0, db_default=0)
+    dirty = models.BooleanField(default=True, db_index=True)
+    valid_until = models.DateTimeField(null=True, blank=True)
+    search_text = models.TextField(default='', blank=True)
+    name_key = models.TextField(default='', blank=True)
+    category_key = models.CharField(max_length=300, default='', blank=True, db_index=True)
+
+
+class MenuDietaryStatus(models.Model):
+    menu = models.ForeignKey('Menu', on_delete=models.CASCADE, related_name='dietary_statuses')
+    criterion = models.ForeignKey('dietary.Criterion', on_delete=models.CASCADE)
+    menu_revision = models.PositiveBigIntegerField()
+    rank = models.PositiveSmallIntegerField(choices=[(0, 'match'), (1, 'needs_check'), (2, 'mismatch')])
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['menu', 'criterion'], name='catalog_unique_menu_criterion')]
+        indexes = [models.Index(fields=['criterion', 'rank', 'menu'], name='catalog_dietary_lookup')]
 
 
 class Restaurant(models.Model):

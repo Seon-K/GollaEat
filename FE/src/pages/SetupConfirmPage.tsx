@@ -1,3 +1,4 @@
+import { SkeletonBlock } from "@/components/LoadingSkeleton";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { useState } from "react";
@@ -138,9 +139,9 @@ function SetupConfirmContent() {
       </div>
 
       <div className="fixed bottom-0 left-1/2 z-30 w-full max-w-[430px] -translate-x-1/2 bg-background px-5 pt-3 safe-bottom">
-        <PrimaryButton onClick={() => void saveAndGo()} disabled={saving}>
+        <PrimaryButton onClick={() => void saveAndGo()} disabled={saving} aria-busy={saving} aria-label={saving ? "프로필 저장 중" : undefined}>
           {saving
-            ? "저장 중…"
+            ? <SkeletonBlock className="h-4 w-44 !bg-white/40" />
             : fromMy
               ? "설정 저장하고 마이페이지로"
               : "설정 저장하고 메뉴 탐색하기"}

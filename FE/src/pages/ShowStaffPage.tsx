@@ -1,4 +1,4 @@
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { X } from "lucide-react";
 import { useWakeLock } from "@/hooks/useWakeLock";
@@ -84,6 +84,10 @@ function ShowStaffContent() {
         </p>
       </div>
 
+      <Link to={menuId ? `/menu/${encodeURIComponent(menuId)}/contribute?from=staff` : "/explore"}
+        className="mt-8 flex min-h-12 items-center justify-center rounded-full bg-white px-4 py-3 text-sm font-semibold text-primary-dark">
+        {menuId ? "매장에서 확인한 정보 제보하기" : "제보할 메뉴 선택하기"}
+      </Link>
       <p className="text-center text-[12px] text-white/50 safe-bottom">
         닫으면 이전 메뉴 화면으로 돌아갑니다.
       </p>

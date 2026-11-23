@@ -5,6 +5,10 @@
 
 스택: **React + TypeScript + Vite + React Router** + Tailwind CSS.
 
+홈 / 지도 / 마이 탭과 위치 기반 식당 탐색의 API·환경 설정은
+[지도 탐색 문서](docs/map-discovery.md)를 참고하세요.
+린트는 React Hooks·TypeScript용 ESLint flat config를 사용합니다.
+
 ## 실행 방법
 
 ```bash

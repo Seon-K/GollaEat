@@ -10,7 +10,7 @@ interface NearbyMapProps {
 export function NearbyMap({
   markers,
   center,
-  showUserLocation = true,
+  showUserLocation = false,
 }: NearbyMapProps) {
   return (
     <KakaoMapView
