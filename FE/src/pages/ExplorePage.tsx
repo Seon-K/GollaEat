@@ -215,7 +215,7 @@ export default function ExplorePage() {
                   key={item.id}
                   item={item}
                   onToggleSave={() => void fav.toggleSave(item.id)}
-                  saving={fav.toggling}
+                  saving={fav.isSaving(item.id)}
                 />
               ))}
               {cards.length === 0 ? (

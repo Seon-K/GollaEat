@@ -117,7 +117,7 @@ export default function MyPage() {
                 item={item}
                 variant="saved"
                 onToggleSave={() => void fav.toggleSave(item.id)}
-                saving={fav.toggling}
+                saving={fav.isSaving(item.id)}
               />
             ))}
           </div>

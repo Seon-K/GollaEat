@@ -74,9 +74,10 @@ export function MenuCard({
         <button
           type="button"
           aria-label={item.saved ? "저장 해제" : "메뉴 저장"}
-          disabled={saving}
+          aria-busy={saving}
+          aria-pressed={item.saved}
           onClick={onToggleSave}
-          className="absolute top-3 right-3 inline-flex items-center justify-center text-primary touch-target disabled:opacity-50"
+          className="absolute top-3 right-3 inline-flex items-center justify-center text-primary touch-target"
         >
           <Bookmark
             className="size-5"

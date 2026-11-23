@@ -137,7 +137,7 @@ function MenuDetailContent() {
           onClick={() => void fav.toggleSave(menu.id)}
           className="touch-target inline-flex items-center justify-center text-primary"
           aria-label="저장"
-          disabled={fav.toggling}
+          aria-busy={fav.isSaving(menu.id)}
         >
           <Bookmark className="size-5" fill={saved ? "currentColor" : "none"} />
         </button>
