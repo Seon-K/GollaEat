@@ -1,3 +1,4 @@
+import { ReviewCard } from "@/components/ReviewCard";
 import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
 
 import { useMemo, useState } from "react";
@@ -50,7 +51,7 @@ function MenuDetailContent() {
         discloseConditions: [],
       }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: apiKeys.reviews(id) });
+      void qc.invalidateQueries({ queryKey: apiKeys.reviews().slice(0, 2) });
       setReviewText("");
     },
   });
@@ -242,32 +243,7 @@ function MenuDetailContent() {
             />
           ) : null}
           <div className="mt-3 space-y-3">
-            {(reviewsQuery.data ?? []).map((r) => {
-              const conditionName =
-                r.disclosed_conditions?.[0]?.name ?? reviewTag;
-              return (
-                <div
-                  key={r.id}
-                  className="rounded-2xl border border-[#eef1ef] bg-card p-4"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex size-8 items-center justify-center rounded-full bg-primary-light text-[12px] font-bold text-primary">
-                      {(r.is_mine ? "나" : "리")[0]}
-                    </span>
-                    <span className="text-[14px] font-semibold">
-                      {r.is_mine ? "나**" : "방문객"}
-                    </span>
-                    <Chip label={conditionName} variant="readonly" />
-                  </div>
-                  <p className="mt-2 text-[14px] leading-relaxed text-text">
-                    {r.body}
-                  </p>
-                  <p className="mt-2 text-[11px] text-muted">
-                    방문 경험은 메뉴 안전을 보증하지 않습니다.
-                  </p>
-                </div>
-              );
-            })}
+            {(reviewsQuery.data ?? []).map((review) => <ReviewCard key={review.id} review={review} fallbackLabel={reviewTag} />)}
           </div>
         </section>
 

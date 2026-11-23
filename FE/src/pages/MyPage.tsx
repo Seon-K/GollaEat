@@ -1,6 +1,7 @@
-import { Link } from "react-router-dom";
+import { MyReviews } from "@/components/MyReviews";
+import { Toast } from "@/components/Toast";
+import { Link, useSearchParams } from "react-router-dom";
 
-import { useMemo } from "react";
 import { Bookmark, ChevronRight } from "lucide-react";
 import { ApiErrorPanel, ApiLoading } from "@/components/ApiState";
 import { BottomNav } from "@/components/BottomNav";
@@ -16,23 +17,24 @@ export default function MyPage() {
   const allergens = useProfileStore((s) => s.allergens);
   const restrictions = useProfileStore((s) => s.restrictions);
   const fav = useFavorites();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get("tab") === "reviews" ? "reviews" : "saved";
+  const setTab = (next: "saved" | "reviews") => setSearchParams(next === "reviews" ? { tab: "reviews" } : {}, { replace: true });
 
-  const savedCards: MenuCardModel[] = useMemo(() => {
-    return fav.favorites.map((f) => {
-      const status = f.judgement
-        ? mapServerStatus(f.judgement.status)
-        : ("check" as const);
-      return {
-        id: f.menu_id,
-        name: f.menu?.menu_name ?? f.menu?.name ?? f.menu_id,
-        restaurantName: f.menu?.restaurant?.restaurant_name ?? "",
-        priceAmount: f.menu?.price?.amount ?? 0,
-        distanceKm: null,
-        status,
-        saved: true,
-      };
-    });
-  }, [fav.favorites]);
+  const savedCards: MenuCardModel[] = fav.favorites.map((f) => {
+    const status = f.judgement
+      ? mapServerStatus(f.judgement.status)
+      : ("check" as const);
+    return {
+      id: f.menu_id,
+      name: f.menu?.menu_name ?? f.menu?.name ?? f.menu_id,
+      restaurantName: f.menu?.restaurant?.restaurant_name ?? "",
+      priceAmount: f.menu?.price?.amount ?? 0,
+      distanceKm: null,
+      status,
+      saved: fav.isSaved(f.menu_id),
+    };
+  });
 
   return (
     <main className="min-h-[100dvh] bg-background pb-24">
@@ -79,14 +81,21 @@ export default function MyPage() {
         </section>
 
         <section className="mt-6">
-          <h2 className="text-[16px] font-bold text-text">저장한 항목</h2>
-          <div className="mt-3">
-            <span className="inline-flex h-9 items-center rounded-full bg-primary px-4 text-[13px] font-semibold text-white">
-              저장 메뉴
-            </span>
+          <h2 className="text-[16px] font-bold text-text">내 활동</h2>
+          <div className="mt-3 flex gap-2" role="tablist" aria-label="내 활동">
+            {([{ id: "saved", label: "저장 메뉴" }, { id: "reviews", label: "내가 작성한 리뷰" }] as const).map(({ id, label }) =>
+              <button key={id} id={`my-tab-${id}`} type="button" role="tab" aria-selected={tab === id} aria-controls={`my-panel-${id}`}
+                tabIndex={tab === id ? 0 : -1} onKeyDown={(event) => {
+                  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                  event.preventDefault();
+                  const next = event.key === "Home" ? "saved" : event.key === "End" ? "reviews" : id === "saved" ? "reviews" : "saved";
+                  setTab(next); document.getElementById(`my-tab-${next}`)?.focus();
+                }} onClick={() => setTab(id)} className={`inline-flex h-10 items-center rounded-full px-4 text-[13px] font-semibold ${tab === id ? "bg-primary text-white" : "border border-border-strong bg-card text-muted"}`}>{label}</button>)}
           </div>
-
-          <div className="mt-4 space-y-3">
+          <div role="tabpanel" id="my-panel-reviews" aria-labelledby="my-tab-reviews" hidden={tab !== "reviews"} className="mt-4">
+            <MyReviews active={tab === "reviews"} />
+          </div>
+          <div role="tabpanel" id="my-panel-saved" aria-labelledby="my-tab-saved" hidden={tab !== "saved"} className="mt-4 space-y-3">
             {fav.isLoading ? <ApiLoading /> : null}
             {fav.isError ? (
               <ApiErrorPanel
@@ -111,19 +120,19 @@ export default function MyPage() {
                 </Link>
               </div>
             ) : null}
-            {savedCards.map((item) => (
+            {!fav.isLoading && !fav.isError && savedCards.map((item) => (
               <MenuCard
                 key={item.id}
                 item={item}
                 variant="saved"
-                onToggleSave={() => void fav.toggleSave(item.id)}
+                onToggleSave={() => void fav.toggleSave(item.id, item)}
                 saving={fav.isSaving(item.id)}
               />
             ))}
           </div>
         </section>
       </div>
-      <BottomNav />
+      <Toast message={fav.saveError ?? ""} visible={!!fav.saveError} /><BottomNav />
     </main>
   );
 }
