@@ -43,7 +43,7 @@ export default function DesignSystemPage() {
         <Wordmark />
         <div className="mt-4 flex items-end gap-4">
           <div className="text-center">
-            <MascotLogo framed className="size-20" />
+            <MascotLogo variant="landing" className="size-20" />
             <p className="mt-2 text-[11px] text-muted">앱 아이콘</p>
           </div>
         </div>
