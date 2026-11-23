@@ -16,7 +16,7 @@ import { Toast } from "@/components/Toast";
 import { allergenLabel } from "@/data/allergens";
 import { restrictionLabel } from "@/data/restrictions";
 import { SCH_ORIGIN } from "@/data/mock";
-import { useGeolocation } from "@/hooks/useGeolocation";
+import { useGeolocation } from "@/hooks/chatbot/useGeolocation";
 import type {
   ChatMenuHitUi,
   ChatPlaceCandidateUi,
@@ -105,7 +105,7 @@ export default function AiPage() {
   const navigate = useNavigate();
   const allergens = useProfileStore((s) => s.allergens);
   const restrictions = useProfileStore((s) => s.restrictions);
-  const geo = useGeolocation({ autoRequest: true });
+  const geo = useGeolocation();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sending, setSending] = useState(false);
@@ -116,8 +116,8 @@ export default function AiPage() {
     lng: number;
   } | null>(null);
 
-  const defaultLocation = geo.position !== null
-    ? { lat: geo.position!.lat, lng: geo.position!.lng }
+  const defaultLocation = geo.location.isGps
+    ? { lat: geo.location.lat, lng: geo.location.lng }
     : { lat: SCH_ORIGIN.lat, lng: SCH_ORIGIN.lng };
 
   const conditionChips = useMemo(
@@ -218,13 +218,13 @@ export default function AiPage() {
       void send(question);
       return;
     }
-    if (!geo.position) {
-      setToast(geo.status === "loading"
+    if (!geo.location.isGps) {
+      setToast(geo.status === "pending"
         ? "현재 위치를 확인 중이에요. 잠시 후 다시 눌러 주세요."
         : "현재 위치를 사용할 수 없어요. 위치 권한을 확인하거나 장소 이름으로 검색해 주세요.");
       return;
     }
-    const { lat, lng } = geo.position;
+    const { lat, lng } = geo.location;
     void send(question, { location: { lat, lng } });
   };
 

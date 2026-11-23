@@ -24,23 +24,6 @@ def _simple_sort_text(value):
 
 
 class DatabaseCatalogRepository:
-    def nearby_menu_rows(self, location, radius_km, restaurant_query='', menu_query=''):
-        from .services import haversine_km
-        distances = {}
-        stores = Restaurant.objects.exclude(latitude=None).exclude(longitude=None).values('pk', 'name', 'brand', 'latitude', 'longitude')
-        for store in stores:
-            if restaurant_query and restaurant_query.casefold() not in (store['name'] + ' ' + store['brand']).casefold():
-                continue
-            distance = haversine_km(location['lat'], location['lng'], store['latitude'], store['longitude'])
-            if distance <= radius_km:
-                distances[store['pk']] = distance * 1000
-        rows = Menu.objects.filter(restaurant_id__in=distances).values('pk', 'name', 'restaurant_id', 'restaurant__name', 'sale_status')
-        result = [{'restaurant_id': row['restaurant_id'], 'restaurant_name': row['restaurant__name'],
-                   'menu_id': row['pk'], 'menu_name': row['name'], 'distance_m': distances[row['restaurant_id']],
-                   'branch_sale_status': row['sale_status']} for row in rows
-                  if not menu_query or menu_query.casefold() in row['name'].casefold()]
-        return sorted(result, key=lambda row: (row['distance_m'], str(row['restaurant_id']), str(row['menu_id'])))
-
     def _restaurants(self):
         return Restaurant.objects.select_related('hours_source').annotate(
             _catalog_has_hours=Exists(BusinessHours.objects.filter(restaurant_id=OuterRef('pk'))),
