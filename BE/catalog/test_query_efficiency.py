@@ -20,7 +20,8 @@ class LegacyReadRepository:
         return self.repository.list_menus()
 
     def list_restaurants(self):
-        return self.repository.list_restaurants()
+        rows = Restaurant.objects.select_related('hours_source').prefetch_related('business_hours', 'closures__source')
+        return [self.repository._restaurant(row) for row in rows.order_by('place_id')]
 
     def coordinates(self):
         return {r['restaurant_id']: (r['latitude'], r['longitude']) for r in self.list_restaurants()
@@ -146,8 +147,8 @@ class MenuQueryEfficiencyTests(TestCase):
             result = list_restaurants(QueryDict('lat=36.78&lng=127.05&sort=distance_asc&limit=1'), repo)
         self.assertEqual(result['results'][0]['restaurant_id'], 'near')
         self.assertEqual(serialize.call_count, 1)
-        self.assertEqual(len(queries), 4)
-        self.assertEqual(sum('FROM "catalog_businesshours"' in q['sql'] for q in queries), 1)
+        self.assertEqual(len(queries), 2)
+        self.assertFalse(any(q['sql'].startswith('SELECT "catalog_businesshours".') for q in queries))
 
 
 @override_settings(CATALOG_USE_DB=True)
