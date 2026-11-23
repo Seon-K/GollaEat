@@ -109,6 +109,8 @@ def chat_view(request):
         request.session['chat_results'] = [
             {'menu_id': menu['menu_id'], 'name': menu['name'], 'restaurant': store['restaurant']}
             for key in ('matched', 'needs_check') for store in result[key] for menu in store['menus']][:60]
+    elif reset:
+        request.session['chat_results'] = []
     history = [] if reset else request.session.get('chat_history', [])
     history += [{'user': f'Expand search to {radius} m' if expanding else message, 'assistant': answer[:2000]}]
     request.session['chat_history'] = history[-6:]
