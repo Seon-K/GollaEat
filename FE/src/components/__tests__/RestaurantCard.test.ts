@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { RestaurantCard } from "./RestaurantCard";
+import { RestaurantCard } from "@/components/RestaurantCard";
 import type { RestaurantUi } from "@/lib/api/adapters";
 
 const restaurant: RestaurantUi = {

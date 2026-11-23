@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
-import { ReviewCard } from "./ReviewCard";
+import { ReviewCard } from "@/components/ReviewCard";
 
 describe("review ownership presentation", () => {
   it.each([true, false])("shows the management dropdown only for own reviews (is_mine=%s)", (is_mine) => {

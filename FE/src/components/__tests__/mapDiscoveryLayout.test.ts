@@ -5,9 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import ExplorePage from "@/pages/ExplorePage";
 import MapPage from "@/pages/MapPage";
-import { DiscoveryControls } from "./DiscoveryControls";
-import { RestaurantCard } from "./RestaurantCard";
-import { MenuCard } from "./MenuCard";
+import { DiscoveryControls } from "@/components/DiscoveryControls";
+import { RestaurantCard } from "@/components/RestaurantCard";
+import { MenuCard } from "@/components/MenuCard";
 
 describe("map discovery presentation", () => {
   it("preserves the original home location selector and layout without a map", () => {
