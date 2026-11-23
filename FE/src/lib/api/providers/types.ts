@@ -70,5 +70,6 @@ export interface DataProvider {
   postChat(input: {
     message: string;
     location?: { lat: number; lng: number };
+    radius_m?: number;
   }): Promise<ChatResultUi>;
 }

@@ -6,16 +6,21 @@ from dietary.models import Criterion
 from dietary.services import evaluate, resolve_criteria, EvaluationContext
 
 
+class UnsupportedCriterion(ValueError):
+    pass
+
+
 def criteria_codes(state):
     codes = list(state.get('criteria', []))
     for field, kind in [('allergens', 'allergen'), ('ingredients', 'ingredient')]:
         for term in state.get(field, []):
+            term = {'땅콩': '견과류', '호두': '견과류', '잣': '견과류'}.get(term, term)
             matches = list(Criterion.objects.filter(active=True, kind=kind, name=term))
             # 재료 목록에 없는 이름은 같은 이름의 알레르겐 제한으로 처리한다.
             if not matches and kind == 'ingredient':
                 matches = list(Criterion.objects.filter(active=True, kind='allergen', name=term))
             if len(matches) != 1:
-                raise ValueError(f'지원하는 식이 조건 목록에서 확인해 주세요: {term}')
+                raise UnsupportedCriterion(f'지원하는 식이 조건 목록에서 확인해 주세요: {term}')
             codes.append(matches[0].code)
     return list(dict.fromkeys(codes))
 

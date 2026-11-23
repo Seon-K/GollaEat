@@ -321,6 +321,7 @@ export interface ChatResultUi {
   needsCheck: ChatMenuHitUi[];
   criteria: string[];
   radiusM: number | null;
+  nextRadiusM?: number;
   state: ApiChatResponse["state"];
 }
 
@@ -455,6 +456,7 @@ export function adaptChatResponse(raw: ApiChatResponse): ChatResultUi {
     needsCheck,
     criteria: Array.isArray(result.criteria) ? result.criteria : [],
     radiusM: typeof result.radius_m === "number" ? result.radius_m : null,
+    ...(typeof result.next_radius_m === "number" ? { nextRadiusM: result.next_radius_m } : {}),
     state: raw.state ?? {},
   };
 }

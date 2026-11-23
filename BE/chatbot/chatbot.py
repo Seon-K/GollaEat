@@ -150,21 +150,30 @@ def format_response(result):
         return result["explanation"]
     if "question" in result:
         return result["question"]
-    lines = []
-    for key, label in (("matched", "식이 조건 일치"), ("needs_check", "추가 확인 필요")):
-        if result[key]:
-            lines.append(label)
-        elif key == "matched":
-            lines.append("현재 확인된 정보에서 식이 조건에 맞는 메뉴를 찾지 못했어요.")
-        for store in result[key]:
-            for menu in store["menus"]:
-                lines.append(
-                    f'{store["restaurant"]} · {menu["name"]} · '
-                    f'{store["distance_m"]}m · {menu["reason"]}'
-                )
-    if not (result["matched"] or result["needs_check"]):
-        lines.append("검색 범위를 넓혀 보세요.")
-    return "\n".join(lines)
+    matched = sum(len(store['menus']) for store in result.get('matched', []))
+    uncertain = sum(len(store['menus']) for store in result.get('needs_check', []))
+    if matched:
+        text = f"확인된 정보상 식이 조건에 일치하는 메뉴 {matched}개를 찾았어요."
+    else:
+        text = "현재 확인된 정보에서 식이 조건에 맞는 메뉴를 찾지 못했어요."
+    if uncertain:
+        text += f" 추가 확인이 필요한 메뉴 {uncertain}개는 아래 카드에서 확인해 주세요."
+    elif not matched:
+        text += " 검색 범위를 넓혀 보세요."
+    return text
+
+
+def response_summary(result):
+    """Cards keep full evidence; prose generation only needs aggregate search facts."""
+    if 'matched' not in result:
+        return result
+    return {
+        'criteria': result.get('criteria', []), 'radius_m': result.get('radius_m'),
+        'counts': {key: {'restaurants': len(result.get(key, [])),
+                         'menus': sum(len(s['menus']) for s in result.get(key, []))}
+                   for key in ('matched', 'needs_check')},
+        'instruction': '개수와 확인 상태만 짧게 안내한다. 메뉴 목록은 별도 카드에 표시되므로 나열하지 않는다.',
+    }
 
 
 def chat(message, state, parse=parse_demo, search=demo_search):

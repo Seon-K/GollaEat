@@ -76,3 +76,8 @@ class BackendSearchTests(TestCase):
         with self.assertRaises(ValueError):
             validate_location({'lat': True, 'lng': 127})
 
+
+    def test_peanut_maps_to_existing_nuts_group(self):
+        from chatbot.backend import criteria_codes
+        self.assertEqual(criteria_codes({'ingredients': ['땅콩']}), ['allergen-nuts'])
+        self.assertEqual(criteria_codes({'allergens': ['땅콩']}), ['allergen-nuts'])
