@@ -270,7 +270,7 @@ function MenuDetailContent() {
       </div>
 
       <div className="fixed bottom-0 left-1/2 z-30 w-full max-w-phone -translate-x-1/2 bg-background/95 px-5 pt-2 backdrop-blur safe-bottom">
-        <div className="mb-2 flex justify-center">
+        <div className="mb-2 flex justify-end">
           <Link
             to={`/show-staff?menuId=${menu.id}`}
             className="inline-flex h-11 items-center gap-2 rounded-full bg-primary-dark px-4 text-[13px] font-semibold text-white"

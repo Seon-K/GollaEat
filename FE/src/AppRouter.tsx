@@ -49,6 +49,7 @@ export function AppRouter() {
         <Route path="/menu/:id/reasoning" element={<MenuReasoningPage />} />
         <Route path="/menu/:id/inquiry" element={<MenuInquiryPage />} />
         <Route path="/menu/:id/report" element={<MenuReportPage />} />
+        <Route path="/menu/:id/contribute" element={<MenuReportPage mode="contribution" />} />
         <Route path="/menu/:id/inquire" element={<InquireRelativeRedirect />} />
         <Route path="/show-staff" element={<ShowStaffPage />} />
         <Route path="/design-system" element={<DesignSystemPage />} />
