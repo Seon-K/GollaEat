@@ -65,6 +65,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'dietary.cache_identity.CacheIdentityMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -109,6 +110,13 @@ if database_url:
         raise ImproperlyConfigured('DATABASE_URL must be a valid PostgreSQL URL') from None
     if database_config['ENGINE'] != 'django.db.backends.postgresql':
         raise ImproperlyConfigured('DATABASE_URL must use PostgreSQL')
+    # runserver creates a new thread per request; share bounded connections
+    # across those threads instead of repeating remote TLS/authentication.
+    if os.getenv('DATABASE_POOL_ENABLED', 'true').lower() == 'true':
+        database_config['CONN_MAX_AGE'] = 0
+        database_config.setdefault('OPTIONS', {})['pool'] = {
+            'min_size': 1, 'max_size': 5, 'timeout': 30, 'max_lifetime': 600,
+        }
     DATABASES = {'default': database_config}
 else:
     DATABASES = {
@@ -173,6 +181,16 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CATALOG_MENU_CSV = os.getenv('CATALOG_MENU_CSV', '')
 CATALOG_FINAL_CSV = os.getenv('CATALOG_FINAL_CSV', '')
 CATALOG_USE_DB = os.getenv('CATALOG_USE_DB', 'true').lower() == 'true'
+DIETARY_JUDGEMENT_CACHE_ENABLED = os.getenv('DIETARY_JUDGEMENT_CACHE_ENABLED', 'true').lower() == 'true'
+DIETARY_JUDGEMENT_CACHE_TTL = 60
+CACHES = {
+    'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'},
+    'dietary_judgements': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'gollaeat-judgements',
+        'OPTIONS': {'MAX_ENTRIES': 20000},
+    },
+}
 CATALOG_GEOCODER = os.getenv('CATALOG_GEOCODER', 'catalog.geocoding.Geocoder')
 CATALOG_GEOCODER_API_KEY = os.getenv('CATALOG_GEOCODER_API_KEY', '')
 CATALOG_GEOCODER_TIMEOUT = os.getenv('CATALOG_GEOCODER_TIMEOUT', '5')
@@ -183,3 +201,6 @@ CATALOG_COORDINATE_CSVS = tuple(filter(None, (
     os.getenv('CATALOG_FRANCHISE_COORDINATE_CSV', ''),
     os.getenv('CATALOG_ASAN_COORDINATE_CSV', ''),
 )))
+
+# Persistent derived search index; auto enables PostgreSQL after migration.
+CATALOG_DIETARY_INDEX_ENABLED = os.getenv("CATALOG_DIETARY_INDEX_ENABLED", "auto")

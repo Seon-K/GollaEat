@@ -17,6 +17,13 @@ class ReviewOwnershipTests(TestCase):
         self.own = Review.objects.create(profile=self.profile, menu_id='menu', body='mine', disclosed_conditions=self.milk)
         self.theirs = Review.objects.create(profile=self.other, menu_id='menu', body='other', disclosed_conditions=self.milk)
 
+    def test_session_bootstrap_contains_current_profile(self):
+        self.profile.criteria.add(Criterion.objects.get(code='allergen-milk'))
+        response = self.client.get('/api/session').json()
+        self.assertTrue(response['csrf_token'])
+        self.assertEqual(response['profile']['criteria'], ['allergen-milk'])
+        self.assertEqual(response['profile']['setup_completed'], self.profile.setup_completed)
+
     def test_list_and_detail_is_mine_without_identity_disclosure(self):
         data = self.client.get('/api/reviews').json()['reviews']
         self.assertEqual({r['id']: r['is_mine'] for r in data}, {self.own.pk: True, self.theirs.pk: False})
@@ -50,6 +57,33 @@ class ReviewOwnershipTests(TestCase):
         self.assertTrue(result.json()['is_mine'])
         self.assertEqual(self.client.patch(f'/api/reviews/{self.theirs.pk}', {'body': 'edit', 'is_mine': True}, content_type='application/json').status_code, 404)
         self.assertEqual(self.client.delete(f'/api/reviews/{self.theirs.pk}').status_code, 404)
+
+    def test_own_review_edit_validation_and_delete(self):
+        response = self.client.patch(f'/api/reviews/{self.own.pk}', {'body': 'updated'}, content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.own.refresh_from_db()
+        self.assertEqual(self.own.body, 'updated')
+        self.assertEqual(self.own.disclosed_conditions, self.milk)
+        self.assertEqual(self.client.patch(f'/api/reviews/{self.own.pk}', {'body': '   '}, content_type='application/json').status_code, 400)
+        self.assertEqual(self.client.delete(f'/api/reviews/{self.own.pk}').status_code, 200)
+        self.assertFalse(Review.objects.filter(pk=self.own.pk).exists())
+        self.assertTrue(Review.objects.filter(pk=self.theirs.pk).exists())
+        self.assertEqual(self.client.delete(f'/api/reviews/{self.own.pk}').status_code, 404)
+
+    def test_my_review_menu_names_are_batched_and_do_not_include_other_authors(self):
+        from catalog.models import Menu, Restaurant
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        store = Restaurant.objects.create(place_id='review-store', name='Review restaurant')
+        Menu.objects.create(preprocess_row_id='menu', name='Review menu', restaurant=store)
+        Review.objects.bulk_create([Review(profile=self.profile, menu_id='menu', body=f'own-{n}') for n in range(25)])
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get('/api/reviews?mine=true&page=2&limit=20').json()
+        self.assertEqual(response['pagination']['total'], 26)
+        self.assertEqual(len(response['reviews']), 6)
+        self.assertTrue(all(row['is_mine'] for row in response['reviews']))
+        self.assertTrue(all(row['menu_name'] == 'Review menu' and row['restaurant_name'] == 'Review restaurant' for row in response['reviews']))
+        self.assertEqual(sum('FROM "catalog_menu"' in query['sql'] for query in queries), 1)
 
 
 class EvaluationQueryTests(TestCase):

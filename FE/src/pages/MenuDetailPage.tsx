@@ -1,10 +1,13 @@
+import { allergenDisplay, STORE_CONFIRMATION_NOTICE } from "@/lib/allergenDisplay";
+import { ReviewCard } from "@/components/ReviewCard";
+import { MenuDetailSkeleton } from "@/components/MenuDetailSkeleton";
+import { Toast } from "@/components/Toast";
 import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bookmark, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import { ApiErrorPanel, ApiLoading } from "@/components/ApiState";
-import { Chip } from "@/components/Chip";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { StatusBadge } from "@/components/StatusBadge";
 import { StoreMap } from "@/components/StoreMap";
@@ -21,7 +24,7 @@ function MenuDetailContent() {
   const id = String(params.id ?? "");
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const backHref = searchParams.get("from") === "my" ? "/my" : "/explore";
+  const backHref = searchParams.get("from") === "my" ? (searchParams.get("tab") === "reviews" ? "/my?tab=reviews" : "/my") : "/explore";
   const qc = useQueryClient();
   const allergens = useProfileStore((s) => s.allergens);
   const fav = useFavorites();
@@ -50,7 +53,7 @@ function MenuDetailContent() {
         discloseConditions: [],
       }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: apiKeys.reviews(id) });
+      void qc.invalidateQueries({ queryKey: apiKeys.reviews().slice(0, 2) });
       setReviewText("");
     },
   });
@@ -74,12 +77,9 @@ function MenuDetailContent() {
     return [...new Set([...judgement.unknownItems, ...fromReasons])];
   }, [judgement]);
 
-  if (menuQuery.isLoading) {
-    return (
-      <main className="min-h-[100dvh] bg-background px-5 pt-6">
-        <ApiLoading />
-      </main>
-    );
+  if ((!menuQuery.isError && (menuQuery.isPending || menuQuery.isFetching)) ||
+      (!judgementQuery.isError && (judgementQuery.isPending || judgementQuery.isFetching))) {
+    return <MenuDetailSkeleton />;
   }
 
   if (menuQuery.isError || !menu) {
@@ -96,11 +96,23 @@ function MenuDetailContent() {
     );
   }
 
-  const copy = judgement ? VERDICT_COPY[judgement.status] : undefined;
+  if (judgementQuery.isError || !judgement) {
+    return (
+      <main className="p-6">
+        <ApiErrorPanel
+          error={judgementQuery.error}
+          onRetry={() => void judgementQuery.refetch()}
+        />
+      </main>
+    );
+  }
+
+  const copy = VERDICT_COPY[judgement.status];
+  const allergensInfo = allergenDisplay(menu.allergenInformation);
   const panelDescription =
-    judgement?.status === "check" && unknownBits.length > 0
+    judgement.guidance?.message ?? (judgement.status === "check" && unknownBits.length > 0
       ? "재료 정보 없음 · 매장 확인 필요"
-      : copy?.description;
+      : copy.description);
 
   const mapUrl =
     typeof menu.lat === "number" && typeof menu.lng === "number"
@@ -111,6 +123,7 @@ function MenuDetailContent() {
 
   return (
     <main className="min-h-[100dvh] bg-background pb-40">
+      <Toast message={fav.saveError ?? ""} visible={!!fav.saveError} />
       <header className="sticky top-0 z-20 flex h-14 items-center justify-between bg-background/95 px-3 backdrop-blur">
         <button
           type="button"
@@ -123,10 +136,11 @@ function MenuDetailContent() {
         </button>
         <button
           type="button"
-          onClick={() => void fav.toggleSave(menu.id)}
+          onClick={() => void fav.toggleSave(menu.id, { ...menu, saved })}
           className="touch-target inline-flex items-center justify-center text-primary"
           aria-label="저장"
-          disabled={fav.toggling}
+          aria-busy={fav.isSaving(menu.id)}
+          aria-pressed={saved}
         >
           <Bookmark className="size-5" fill={saved ? "currentColor" : "none"} />
         </button>
@@ -141,52 +155,27 @@ function MenuDetailContent() {
           </p>
         </section>
 
-        {judgementQuery.isError ? (
-          <ApiErrorPanel error={judgementQuery.error} onRetry={() => void judgementQuery.refetch()} />
-        ) : judgement ? <StatusBadge
+        <StatusBadge
           status={judgement.status}
           variant="panel"
+          title={judgement.guidance?.label}
           description={panelDescription}
-          note="교차접촉 및 조리 과정은 판단 범위에서 제외"
-        /> : <section className="rounded-2xl border border-[#eef1ef] bg-card p-4" role="status" aria-live="polite">
-          <p className="text-[14px] text-muted">식이 조건 확인 중…</p>
-        </section>}
+          note={judgement.guidance?.notice || STORE_CONFIRMATION_NOTICE}
+        />
 
         <section className="rounded-2xl border border-[#eef1ef] bg-card p-4">
           <h2 className="text-[15px] font-bold text-text">재료 · 알레르겐 정보</h2>
-          {!judgement || judgementQuery.isError ? (
-            <p className="mt-3 text-[14px] text-muted">
-              {judgementQuery.isError ? "판정 정보를 불러오지 못했습니다. 재료·알레르겐 확인이 필요합니다." : "식이 판정 정보를 확인하고 있습니다."}
-            </p>
-          ) : <>
           <p className="mt-3 text-[14px] leading-relaxed text-text">
-            <span className="text-muted">확인 재료: </span>
-            확인된 정보 기준
+            <span className="text-muted">표시된 알레르겐: </span>
+            {allergensInfo.labels.length ? allergensInfo.labels.join(" · ") : "제공된 알레르겐 정보가 없습니다."}
           </p>
           {restrictedHits.length > 0 ? (
             <p className="mt-2 text-[14px] font-bold text-error">
-              확인된 제한 성분: {restrictedHits.join(", ")}
-            </p>
-          ) : (
-            <p className="mt-2 text-[14px] font-bold text-primary">
-              확인된 제한 성분 없음
-            </p>
-          )}
-          {unknownBits.length > 0 ? (
-            <p className="mt-2 text-[13px] text-accent-text">
-              미확인: {unknownBits.join(" · ")}
+              내 조건과 충돌하는 항목: {restrictedHits.join(", ")}
             </p>
           ) : null}
-          {judgement.unknownMessages.length > 0 ? (
-            <ul className="mt-2 space-y-1">
-              {judgement.unknownMessages.slice(0, 3).map((msg) => (
-                <li key={msg} className="text-[13px] text-muted">
-                  {msg}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          </>}
+          {allergensInfo.brandReference && <p className="mt-2 text-xs leading-relaxed text-muted">브랜드 제공 알레르겐 표시 정보이며, 현재 지점의 실제 재료·레시피와 다를 수 있습니다.</p>}
+          <p className="mt-3 text-[13px] leading-relaxed text-accent-text">추가 확인 필요: {STORE_CONFIRMATION_NOTICE}</p>
           <Link
             to={`/menu/${menu.id}/reasoning`}
             className="mt-3 flex items-center justify-between text-[14px] font-medium text-primary touch-target"
@@ -233,7 +222,7 @@ function MenuDetailContent() {
           <p className="mt-1 text-[12px] text-muted">
             실제 주문·방문 경험 · 이용자 작성 정보
           </p>
-          {reviewsQuery.isLoading ? <ApiLoading label="리뷰 불러오는 중" /> : null}
+          {!reviewsQuery.isError && (reviewsQuery.isPending || reviewsQuery.isFetching) ? <ApiLoading label="리뷰 불러오는 중" /> : null}
           {reviewsQuery.isError ? (
             <ApiErrorPanel
               error={reviewsQuery.error}
@@ -241,32 +230,8 @@ function MenuDetailContent() {
             />
           ) : null}
           <div className="mt-3 space-y-3">
-            {(reviewsQuery.data ?? []).map((r) => {
-              const conditionName =
-                r.disclosed_conditions?.[0]?.name ?? reviewTag;
-              return (
-                <div
-                  key={r.id}
-                  className="rounded-2xl border border-[#eef1ef] bg-card p-4"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex size-8 items-center justify-center rounded-full bg-primary-light text-[12px] font-bold text-primary">
-                      {(r.is_mine ? "나" : "리")[0]}
-                    </span>
-                    <span className="text-[14px] font-semibold">
-                      {r.is_mine ? "나**" : "방문객"}
-                    </span>
-                    <Chip label={conditionName} variant="readonly" />
-                  </div>
-                  <p className="mt-2 text-[14px] leading-relaxed text-text">
-                    {r.body}
-                  </p>
-                  <p className="mt-2 text-[11px] text-muted">
-                    방문 경험은 메뉴 안전을 보증하지 않습니다.
-                  </p>
-                </div>
-              );
-            })}
+            {!reviewsQuery.isFetching && !reviewsQuery.isError && (reviewsQuery.data ?? []).map((review) =>
+              <ReviewCard key={review.id} review={review} fallbackLabel={reviewTag} />)}
           </div>
         </section>
 
@@ -293,7 +258,7 @@ function MenuDetailContent() {
       </div>
 
       <div className="fixed bottom-0 left-1/2 z-30 w-full max-w-phone -translate-x-1/2 bg-background/95 px-5 pt-2 backdrop-blur safe-bottom">
-        <div className="mb-2 flex justify-center">
+        <div className="mb-2 flex justify-end">
           <Link
             to={`/show-staff?menuId=${menu.id}`}
             className="inline-flex h-11 items-center gap-2 rounded-full bg-primary-dark px-4 text-[13px] font-semibold text-white"

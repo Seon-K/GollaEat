@@ -88,13 +88,15 @@ class DatabaseCatalogRepository:
         return {pk: (lat, lng) for pk, lat, lng in Restaurant.objects.filter(
             latitude__isnull=False, longitude__isnull=False).values_list('pk', 'latitude', 'longitude')}
 
-    def menu_candidates(self, *, min_price=None, max_price=None, query='', categories=(), region=''):
+    def menu_candidates(self, *, min_price=None, max_price=None, query='', categories=(), region='', restaurant_id=''):
         """Read only search keys, never full source JSON or analysis/evidence.
 
         Keep Python casefold/alias and Haversine semantics shared with CSV mode.
         Full menu payloads are fetched only after pagination.
         """
         rows = Menu.objects.all()
+        if restaurant_id:
+            rows = rows.filter(restaurant_id=restaurant_id)
         if min_price is not None:
             rows = rows.filter(price_amount__gte=min_price)
         if max_price is not None:
@@ -177,6 +179,37 @@ class DatabaseCatalogRepository:
                      category=category, restaurant_type=kind, latitude=lat, longitude=lng)
                 for pk, name, brand, address, category, kind, lat, lng in Restaurant.objects.values_list(
                     'pk', 'name', 'brand', 'address', 'category', 'restaurant_type', 'latitude', 'longitude')]
+
+    def discovery_candidates(self, *, bounds=None, lat=None, lng=None, radius=None, include_hours=False, region=''):
+        import math
+        rows = self._restaurants() if include_hours else Restaurant.objects.all()
+        if region and '\x00' not in region:
+            rows = rows.filter(_contains_candidates('address', region))
+        if bounds:
+            w, s, e, n = bounds
+            rows = rows.filter(latitude__range=(s, n), longitude__range=(w, e))
+        elif radius is not None:
+            delta = math.degrees(radius / 6371.0088)
+            rows = rows.filter(latitude__range=(lat - delta, lat + delta))
+            if abs(lat) + delta < 90:
+                width = math.degrees(math.asin(min(1, math.sin(radius / 6371.0088) / math.cos(math.radians(lat)))))
+                if -180 <= lng - width and lng + width <= 180:
+                    rows = rows.filter(longitude__range=(lng - width, lng + width))
+        if include_hours:
+            return [self._restaurant(row) for row in self._restaurant_rows(rows)]
+        return list(rows.values('latitude', 'longitude', 'brand', 'address', 'category', 'restaurant_type',
+                                restaurant_id=F('pk'), restaurant_name=F('name')))
+
+    def discovery_menus(self, restaurant_ids):
+        # No full source JSON or per-menu ORM reads in map candidate selection.
+        fields = ('pk', 'name', 'restaurant_id', 'restaurant__name', 'restaurant__brand',
+                  'category', 'restaurant__category', 'price_amount', 'sale_status')
+        return [dict(menu_id=pk, menu_name=name, restaurant_id=rid, restaurant_name=rname,
+                     brand=brand, category=category or fallback, price_amount=price,
+                     price_raw=str(price) if price is not None else None,
+                     price_status='fixed' if price is not None else 'unknown', branch_sale_status=sale)
+                for pk, name, rid, rname, brand, category, fallback, price, sale
+                in Menu.objects.filter(restaurant_id__in=restaurant_ids).values_list(*fields)]
 
     def restaurant_summaries(self, restaurant_ids):
         return {row.pk: self._restaurant(row) for row in self._restaurant_rows(
@@ -268,7 +301,8 @@ class DatabaseCatalogRepository:
         menus = Menu.objects.filter(pk__in=menu_ids).select_related('restaurant', 'analysis_reference', 'allergen_link__source').prefetch_related(
             declarations, 'declarations__import_link__menu',
             Prefetch('components', queryset=MenuComponent.objects.filter(is_default=True).prefetch_related(
-                'declarations__source', 'declarations__import_link__menu')))
+                'declarations__source', 'declarations__import_link__menu'))).defer(
+                    'data', 'description', 'restaurant__data', 'analysis_reference__payload')
         result = dict.fromkeys(menu_ids)
         for menu in menus:
             present, absent, sources = set(), None, {}

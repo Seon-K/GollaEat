@@ -16,7 +16,7 @@ import { Toast } from "@/components/Toast";
 import { allergenLabel } from "@/data/allergens";
 import { restrictionLabel } from "@/data/restrictions";
 import { SCH_ORIGIN } from "@/data/mock";
-import { useGeolocation } from "@/hooks/useGeolocation";
+import { useGeolocation } from "@/hooks/chatbot/useGeolocation";
 import type {
   ChatMenuHitUi,
   ChatPlaceCandidateUi,

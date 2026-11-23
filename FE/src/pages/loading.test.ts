@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useDiscoveryFilters } from "@/hooks/useDiscovery";
 import { createElement as h, cloneElement, StrictMode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -12,13 +13,13 @@ import { SessionGate } from "@/components/SessionGate";
 
 const mocks = vi.hoisted(() => ({
   ensureSession: vi.fn(),
-  provider: { getMenus: vi.fn(), getMenu: vi.fn(), postJudgement: vi.fn(), getReviews: vi.fn(), getProfile: vi.fn() },
-  geo: { location: { lat: 36.78, lng: 127.05, label: "현재 위치", isGps: true },
-    status: "ready" as "ready" | "pending" | "denied" | "unavailable", refresh: vi.fn() },
+  getBootstrapProfile: vi.fn(),
+  provider: { getRestaurants: vi.fn(), getMenus: vi.fn(), getMenu: vi.fn(), postJudgement: vi.fn(), getReviews: vi.fn(), getProfile: vi.fn() },
+  geo: { position: null as null | { lat: number; lng: number }, status: "idle", request: vi.fn() },
 }));
 vi.mock("@/lib/api/providers", () => ({ getDataMode: () => "api", getDataProvider: () => mocks.provider }));
-vi.mock("@/lib/api/client", () => ({ ensureSession: mocks.ensureSession }));
-vi.mock("@/hooks/useFavoriteToggle", () => ({ useFavorites: () => ({ isSaved: () => false, toggling: false, toggleSave: vi.fn() }) }));
+vi.mock("@/lib/api/client", () => ({ ensureSession: mocks.ensureSession, getBootstrapProfile: mocks.getBootstrapProfile, onSessionIdentityChange: () => () => {} }));
+vi.mock("@/hooks/useFavoriteToggle", () => ({ useFavorites: () => ({ isSaved: () => false, isSaving: () => false, toggling: false, toggleSave: vi.fn() }) }));
 vi.mock("@/components/NearbyMap", () => ({ NearbyMap: () => null }));
 vi.mock("@/components/StoreMap", () => ({ StoreMap: () => null }));
 vi.mock("@/hooks/useGeolocation", () => ({ useGeolocation: () => mocks.geo }));
@@ -50,202 +51,105 @@ function mount(component: ReturnType<typeof h>, path = "/explore", gated = false
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useDiscoveryFilters.setState({ home: { query: "", category: "all", sort: "dietary", status: "all" }, homePage: 1, homePageScope: "" });
+  mocks.provider.getRestaurants.mockReset().mockResolvedValue({ items: [], pagination: { ...pagination, limit: 10 } });
+  mocks.getBootstrapProfile.mockReset().mockImplementation(async () => { await mocks.ensureSession(); return null; });
   mocks.provider.getMenus.mockReset().mockResolvedValue({ items: [], pagination });
   mocks.provider.getReviews.mockReset().mockResolvedValue([]);
   mocks.provider.getMenu.mockReset().mockResolvedValue(detail);
   mocks.provider.postJudgement.mockReset().mockResolvedValue(judgement);
   mocks.ensureSession.mockReset().mockResolvedValue(undefined);
   mocks.provider.getProfile.mockReset().mockResolvedValue({ criteria: [], setup_completed: false });
-  mocks.geo = { location: { lat: 36.78, lng: 127.05, label: "현재 위치", isGps: true }, status: "ready", refresh: vi.fn() };
+  mocks.geo = { position: null, status: "idle", request: vi.fn() };
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
-describe("search request lifecycle", () => {
-  it("debounces typing for 300ms and clearing retains existing list parameters", async () => {
+describe("restaurant home integration", () => {
+  it("requests ten restaurants with server filters and does not wait for GPS", async () => {
+    mocks.geo.status = "loading";
     mount(h(ExplorePage));
-    await waitFor(() => expect(mocks.provider.getMenus).toHaveBeenCalledTimes(1));
-    vi.useFakeTimers();
-    const input = screen.getByRole("textbox", { name: "메뉴명 또는 식당명 검색" });
-    fireEvent.change(input, { target: { value: "김" } });
-    await act(() => vi.advanceTimersByTimeAsync(200));
-    fireEvent.change(input, { target: { value: "김밥" } });
-    await act(() => vi.advanceTimersByTimeAsync(299));
-    expect(mocks.provider.getMenus).toHaveBeenCalledTimes(1);
-    await act(() => vi.advanceTimersByTimeAsync(1));
-    expect(mocks.provider.getMenus).toHaveBeenLastCalledWith(expect.objectContaining({ q: "김밥", limit: 40, personalize: true }), expect.objectContaining({ signal: expect.any(AbortSignal) }));
-    fireEvent.change(input, { target: { value: "" } });
-    await act(() => vi.advanceTimersByTimeAsync(300));
-    // Clearing reuses the fresh unfiltered cache instead of issuing a duplicate.
-    expect(mocks.provider.getMenus).toHaveBeenCalledTimes(2);
-    expect(mocks.provider.getMenus.mock.calls[0][0]).toMatchObject({ q: undefined, limit: 40, personalize: true });
+    await waitFor(() => expect(mocks.provider.getRestaurants).toHaveBeenCalledTimes(1));
+    expect(mocks.provider.getRestaurants).toHaveBeenLastCalledWith(expect.objectContaining({ region: "아산시", limit: 10, personalize: true, page: 1, view: "card" }), expect.objectContaining({ signal: expect.any(AbortSignal) }));
   });
-
-  it("cancels the previous query and ignores its late result", async () => {
-    const old = deferred<{ items: MenuListItemUi[]; pagination: typeof pagination }>();
-    mocks.provider.getMenus.mockReturnValueOnce(old.promise).mockResolvedValueOnce({ items: [item("새 메뉴")], pagination });
+  it("debounces search and reuses the cached unfiltered page", async () => {
     mount(h(ExplorePage));
-    await waitFor(() => expect(mocks.provider.getMenus).toHaveBeenCalledTimes(1));
-    const signal = mocks.provider.getMenus.mock.calls[0][1].signal as AbortSignal;
-    vi.useFakeTimers();
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "새" } });
-    expect(signal.aborted).toBe(true);
-    await act(() => vi.advanceTimersByTimeAsync(300));
-    await act(() => vi.advanceTimersByTimeAsync(0));
-    expect(screen.getByText("새 메뉴")).toBeTruthy();
-    await act(async () => { old.resolve({ items: [item("옛 메뉴")], pagination }); await vi.advanceTimersByTimeAsync(0); });
-    expect(screen.queryByText("옛 메뉴")).toBeNull();
-    expect(screen.getByText("새 메뉴")).toBeTruthy();
-  });
-
-  it("does not request unfinished Korean IME text", async () => {
-    mount(h(ExplorePage));
-    await waitFor(() => expect(mocks.provider.getMenus).toHaveBeenCalledTimes(1));
-    vi.useFakeTimers();
-    const input = screen.getByRole("textbox");
-    fireEvent.compositionStart(input);
-    fireEvent.change(input, { target: { value: "김밥" } });
-    await act(() => vi.advanceTimersByTimeAsync(1000));
-    expect(mocks.provider.getMenus).toHaveBeenCalledTimes(1);
-    fireEvent.compositionEnd(input);
-    await act(() => vi.advanceTimersByTimeAsync(300));
-    expect(mocks.provider.getMenus).toHaveBeenLastCalledWith(expect.objectContaining({ q: "김밥" }), expect.anything());
-  });
-
-  it("retains category filtering and price ordering", async () => {
-    mocks.provider.getMenus.mockResolvedValue({ items: [item("비싼 한식", 2000), item("싼 한식", 1000), item("양식", 500, "양식")], pagination });
-    mount(h(ExplorePage));
-    await screen.findByText("비싼 한식");
-    fireEvent.click(screen.getByRole("button", { name: "필터" }));
-    fireEvent.click(screen.getByRole("button", { name: "한식" }));
-    expect(screen.queryByText("양식")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "추천순" }));
-    fireEvent.click(screen.getByRole("button", { name: "낮은 가격순" }));
-    expect(screen.getAllByRole("heading", { level: 3 }).map((node) => node.textContent)).toEqual(["싼 한식", "비싼 한식"]);
-    expect(mocks.provider.getMenus).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("GPS and search integration", () => {
-  it("waits for both location readiness and the debounced search", async () => {
-    mocks.geo.status = "pending";
-    const view = mount(h(ExplorePage));
-    vi.useFakeTimers();
+    await waitFor(() => expect(mocks.provider.getRestaurants).toHaveBeenCalledTimes(1));
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "김밥" } });
-    await act(() => vi.advanceTimersByTimeAsync(300));
-    expect(mocks.provider.getMenus).not.toHaveBeenCalled();
-    mocks.geo = { ...mocks.geo, status: "ready", location: { ...mocks.geo.location, lat: 37, lng: 127 } };
-    view.rerenderPage();
-    await act(() => vi.advanceTimersByTimeAsync(0));
-    expect(mocks.provider.getMenus).toHaveBeenCalledTimes(1);
-    expect(mocks.provider.getMenus).toHaveBeenLastCalledWith(expect.objectContaining({ q: "김밥", lat: 37, lng: 127 }), expect.anything());
+    expect(mocks.provider.getRestaurants).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mocks.provider.getRestaurants).toHaveBeenCalledTimes(2));
+    expect(mocks.provider.getRestaurants.mock.calls[1][0].q).toBe("김밥");
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "" } });
+    await new Promise((resolve) => setTimeout(resolve, 450));
+    expect(mocks.provider.getRestaurants).toHaveBeenCalledTimes(2);
   });
-
-  it("cancels GPS A and ignores its late result after GPS B becomes active", async () => {
-    const previous = deferred<{ items: MenuListItemUi[]; pagination: typeof pagination }>();
-    mocks.provider.getMenus.mockReturnValueOnce(previous.promise).mockResolvedValueOnce({ items: [item("GPS B 결과")], pagination });
+  it("uses actual GPS coordinates and cancels the previous area query", async () => {
+    mocks.provider.getRestaurants.mockReturnValueOnce(new Promise(() => {}));
     const view = mount(h(ExplorePage));
-    await waitFor(() => expect(mocks.provider.getMenus).toHaveBeenCalledTimes(1));
-    const signal = mocks.provider.getMenus.mock.calls[0][1].signal as AbortSignal;
-    mocks.geo = { ...mocks.geo, location: { ...mocks.geo.location, lat: 37.5, lng: 127.2 } };
+    await waitFor(() => expect(mocks.provider.getRestaurants).toHaveBeenCalledTimes(1));
+    const signal = mocks.provider.getRestaurants.mock.calls[0][1].signal as AbortSignal;
+    mocks.geo.position = { lat: 36.8, lng: 127.1 };
     view.rerenderPage();
+    await waitFor(() => expect(mocks.provider.getRestaurants).toHaveBeenCalledTimes(2));
     expect(signal.aborted).toBe(true);
-    await screen.findByText("GPS B 결과");
-    expect(mocks.provider.getMenus).toHaveBeenLastCalledWith(expect.objectContaining({ lat: 37.5, lng: 127.2 }), expect.anything());
-    await act(async () => previous.resolve({ items: [item("GPS A 늦은 결과")], pagination }));
-    expect(screen.queryByText("GPS A 늦은 결과")).toBeNull();
+    expect(mocks.provider.getRestaurants.mock.calls[1][0]).toMatchObject({ lat: 36.8, lng: 127.1 });
+    expect(screen.getByRole("button", { name: "현재 위치" })).toBeTruthy();
   });
-
-  it("keeps requests paused when GPS changes during Korean composition", async () => {
-    const previous = deferred<{ items: MenuListItemUi[]; pagination: typeof pagination }>();
-    mocks.provider.getMenus.mockReturnValueOnce(previous.promise).mockResolvedValueOnce({ items: [], pagination });
-    const view = mount(h(ExplorePage));
-    await waitFor(() => expect(mocks.provider.getMenus).toHaveBeenCalledTimes(1));
-    const signal = mocks.provider.getMenus.mock.calls[0][1].signal as AbortSignal;
-    vi.useFakeTimers();
-    const input = screen.getByRole("textbox");
-    fireEvent.compositionStart(input);
-    fireEvent.change(input, { target: { value: "김밥" } });
-    mocks.geo = { ...mocks.geo, location: { ...mocks.geo.location, lat: 37.2, lng: 127.3 } };
-    view.rerenderPage();
-    await act(() => vi.advanceTimersByTimeAsync(1000));
-    expect(signal.aborted).toBe(true);
-    expect(mocks.provider.getMenus).toHaveBeenCalledTimes(1);
-    fireEvent.compositionEnd(input);
-    await act(() => vi.advanceTimersByTimeAsync(300));
-    expect(mocks.provider.getMenus).toHaveBeenCalledTimes(2);
-    expect(mocks.provider.getMenus).toHaveBeenLastCalledWith(expect.objectContaining({ q: "김밥", lat: 37.2, lng: 127.3 }), expect.anything());
-    await act(async () => previous.resolve({ items: [], pagination }));
-  });
-
-  it("cancels in-flight search while location is being refreshed", async () => {
-    const previous = deferred<{ items: MenuListItemUi[]; pagination: typeof pagination }>();
-    mocks.provider.getMenus.mockReturnValueOnce(previous.promise);
-    const view = mount(h(ExplorePage));
-    await waitFor(() => expect(mocks.provider.getMenus).toHaveBeenCalledTimes(1));
-    const signal = mocks.provider.getMenus.mock.calls[0][1].signal as AbortSignal;
-    mocks.geo = { ...mocks.geo, status: "pending" };
-    view.rerenderPage();
-    expect(signal.aborted).toBe(true);
-    expect(mocks.provider.getMenus).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("위치 확인 중…")).toBeTruthy();
-    await act(async () => previous.resolve({ items: [], pagination }));
-  });
-
-  it("handles fast input, deletion and reverting to the same key without stale results", async () => {
-    const previous = deferred<{ items: MenuListItemUi[]; pagination: typeof pagination }>();
-    mocks.provider.getMenus.mockReturnValueOnce(previous.promise).mockResolvedValueOnce({ items: [item("최신 전체 목록")], pagination });
+  it("allows returning from GPS to the cached Asan origin", async () => {
+    mocks.geo.position = { lat: 36.8, lng: 127.1 };
     mount(h(ExplorePage));
-    await waitFor(() => expect(mocks.provider.getMenus).toHaveBeenCalledTimes(1));
-    vi.useFakeTimers();
-    const input = screen.getByRole("textbox");
-    fireEvent.change(input, { target: { value: "김" } });
-    await act(() => vi.advanceTimersByTimeAsync(100));
-    fireEvent.change(input, { target: { value: "김밥" } });
-    await act(() => vi.advanceTimersByTimeAsync(100));
-    fireEvent.change(input, { target: { value: "" } });
-    await act(() => vi.advanceTimersByTimeAsync(300));
-    expect(mocks.provider.getMenus).toHaveBeenCalledTimes(2);
-    expect(mocks.provider.getMenus.mock.calls.every(([params]) => params.q === undefined)).toBe(true);
-    expect(screen.getByText("최신 전체 목록")).toBeTruthy();
-    await act(async () => { previous.resolve({ items: [item("취소된 전체 목록")], pagination }); await vi.advanceTimersByTimeAsync(0); });
-    expect(screen.queryByText("취소된 전체 목록")).toBeNull();
-  });
-
-  it("preserves GPS-based fallback distance ordering and manual location selection", async () => {
-    const far = { ...item("먼 매장"), distanceKm: null, lat: 37.5, lng: 127.5 };
-    const near = { ...item("가까운 매장"), distanceKm: null, lat: 36.7801, lng: 127.05 };
-    mocks.provider.getMenus.mockResolvedValue({ items: [far, near], pagination });
-    mount(h(ExplorePage));
-    await screen.findByText("가까운 매장");
-    expect(screen.getAllByRole("heading", { level: 3 }).map((node) => node.textContent)).toEqual(["가까운 매장", "먼 매장"]);
+    await waitFor(() => expect(mocks.provider.getRestaurants).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole("button", { name: "현재 위치" }));
     fireEvent.click(screen.getByRole("button", { name: "충남 아산시" }));
+    await waitFor(() => expect(mocks.provider.getRestaurants).toHaveBeenCalledTimes(2));
     expect(screen.getByRole("button", { name: "충남 아산시" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "현재 위치" })).toBeNull();
+    expect(mocks.provider.getRestaurants.mock.calls[1][0].lat).not.toBe(36.8);
+  });
+  it("uses server category and price ordering while keeping ten-item pagination", async () => {
+    mount(h(ExplorePage));
+    await waitFor(() => expect(mocks.provider.getRestaurants).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "음식 카테고리" }));
+    fireEvent.click(screen.getByRole("option", { name: "한식" }));
+    await waitFor(() => expect(mocks.provider.getRestaurants).toHaveBeenCalledTimes(2));
+    fireEvent.click(screen.getByRole("button", { name: "정렬" }));
+    fireEvent.click(screen.getByRole("option", { name: "낮은 가격순" }));
+    await waitFor(() => expect(mocks.provider.getRestaurants).toHaveBeenCalledTimes(3));
+    expect(mocks.provider.getRestaurants.mock.calls[2][0]).toMatchObject({ category: "한식", sort: "price_asc", page: 1, limit: 10 });
+  });
+  it("continues using Asan when GPS is denied or unavailable", async () => {
+    mocks.geo.status = "denied";
+    mount(h(ExplorePage));
+    await waitFor(() => expect(mocks.provider.getRestaurants).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("button", { name: "충남 아산시" })).toBeTruthy();
+    expect(mocks.provider.getRestaurants.mock.calls[0][0]).toMatchObject({ region: "아산시", limit: 10 });
+  });
+  it("shows a skeleton during loading and supports error retry", async () => {
+    mocks.provider.getRestaurants.mockRejectedValueOnce(new Error("조회 실패"));
+    mount(h(ExplorePage));
+    await screen.findByText("조회 실패");
+    fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+    await waitFor(() => expect(mocks.provider.getRestaurants).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText("조회 실패")).toBeNull());
   });
 });
 
-describe("independent detail loading", () => {
-  it("shows basic menu information while judgement is pending", async () => {
+describe("detail request lifecycle", () => {
+  it("waits for the server judgement with a detail skeleton", async () => {
     const pending = deferred<JudgementUi>();
     mocks.provider.postJudgement.mockReturnValue(pending.promise);
     mount(h(MenuDetailPage), "/menu/m1");
-    expect(await screen.findByRole("heading", { name: detail.name })).toBeTruthy();
-    expect(screen.getByText("식이 조건 확인 중…")).toBeTruthy();
-    expect(screen.queryByText("확인된 제한 성분 없음")).toBeNull();
+    await waitFor(() => expect(mocks.provider.postJudgement).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("heading", { name: detail.name })).toBeNull();
     await act(async () => pending.resolve(judgement));
-    await waitFor(() => expect(screen.queryByText("식이 조건 확인 중…")).toBeNull());
+    expect(await screen.findByRole("heading", { name: detail.name })).toBeTruthy();
   });
-
-  it("keeps basic information and allows retry after judgement fails", async () => {
+  it("retries judgement without fetching the menu again", async () => {
     mocks.provider.postJudgement.mockRejectedValueOnce(new Error("판정 연결 실패")).mockResolvedValueOnce(judgement);
     mount(h(MenuDetailPage), "/menu/m1");
     await screen.findByText("판정 연결 실패");
-    expect(screen.getByRole("heading", { name: detail.name })).toBeTruthy();
-    expect(screen.queryByText("확인된 제한 성분 없음")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
-    await waitFor(() => expect(mocks.provider.postJudgement).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(screen.queryByText("판정 연결 실패")).toBeNull());
+    await screen.findByRole("heading", { name: detail.name });
+    expect(mocks.provider.getMenu).toHaveBeenCalledTimes(1);
+    expect(mocks.provider.postJudgement).toHaveBeenCalledTimes(2);
   });
 });
 

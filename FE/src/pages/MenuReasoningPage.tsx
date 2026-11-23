@@ -52,10 +52,11 @@ export default function MenuReasoningPage() {
     queryFn: () => getDataProvider().postJudgement(id),
   });
 
-  if (menuQuery.isLoading || judgementQuery.isLoading) {
+  if ((!menuQuery.isError && (menuQuery.isPending || menuQuery.isFetching)) ||
+      (!judgementQuery.isError && (judgementQuery.isPending || judgementQuery.isFetching))) {
     return (
       <main className="min-h-[100dvh] bg-background px-5 pt-6">
-        <ApiLoading />
+        <ApiLoading variant="reasoning" />
       </main>
     );
   }

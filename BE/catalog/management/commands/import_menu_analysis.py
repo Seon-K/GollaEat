@@ -42,5 +42,8 @@ class Command(BaseCommand):
             if not options['dry_run']:
                 for row, values in rows:
                     MenuAnalysisReference.objects.update_or_create(menu_id=row['preprocess_row_id'], defaults=values)
+        from catalog.dietary_index import rebuild_after_import
+        if not options['dry_run']:
+            rebuild_after_import()
         self.stdout.write(json.dumps({'dry_run': options['dry_run'], 'rows': len(rows),
             'sources': dict(counts)}, ensure_ascii=False, sort_keys=True))

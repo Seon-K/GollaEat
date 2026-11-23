@@ -1,3 +1,4 @@
+import { useSessionState } from "@/components/SessionGate";
 import { useNavigate } from "react-router-dom";
 import { Disclaimer } from "@/components/Disclaimer";
 import { MascotLogo } from "@/components/MascotLogo";
@@ -5,6 +6,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { useProfileStore } from "@/store/profileStore";
 
 export default function SplashPage() {
+  const { ready, error, retry } = useSessionState();
   const navigate = useNavigate();
   const completed = useProfileStore((s) => s.completed);
 
@@ -30,7 +32,7 @@ export default function SplashPage() {
       </div>
 
       <div className="space-y-3 safe-bottom">
-        <PrimaryButton onClick={start}>시작하기</PrimaryButton>
+        {error ? <><p role="alert" className="text-sm text-muted">{error}</p><PrimaryButton onClick={retry}>다시 시도</PrimaryButton></> : <PrimaryButton onClick={start} disabled={!ready}>{ready ? "시작하기" : "연결 중…"}</PrimaryButton>}
         <Disclaimer text="메뉴 정보는 교차접촉 안전을 보증하지 않습니다." />
       </div>
     </main>
