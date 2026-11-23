@@ -10,7 +10,7 @@ describe("home restaurant page caching", () => {
   let client: QueryClient;
   beforeEach(() => {
     client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    getRestaurants.mockReset().mockResolvedValue({ items: [], pagination: { page: 1, limit: 20, count: 0, total: 45, totalPages: 3, nextPage: 2, previousPage: null } });
+    getRestaurants.mockReset().mockResolvedValue({ items: [], pagination: { page: 1, limit: 10, count: 0, total: 45, totalPages: 5, nextPage: 2, previousPage: null } });
   });
   afterEach(() => { client.clear(); vi.useRealTimers(); });
 
@@ -23,8 +23,8 @@ describe("home restaurant page caching", () => {
     vi.setSystemTime(Date.now() + 10 * 60_000);
     await client.fetchQuery(first);
     expect(getRestaurants).toHaveBeenCalledTimes(2);
-    expect(getRestaurants).toHaveBeenNthCalledWith(1, { region: "아산시", page: 1, limit: 20, view: "card" });
-    expect(getRestaurants).toHaveBeenNthCalledWith(2, { region: "아산시", page: 2, limit: 20, view: "card" });
+    expect(getRestaurants).toHaveBeenNthCalledWith(1, { region: "아산시", page: 1, limit: 10, view: "card" });
+    expect(getRestaurants).toHaveBeenNthCalledWith(2, { region: "아산시", page: 2, limit: 10, view: "card" });
     const observer = new QueryObserver(client, first);
     const stop = observer.subscribe(() => {});
     expect(observer.getCurrentResult().isFetching).toBe(false);
