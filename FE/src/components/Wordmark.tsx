@@ -16,7 +16,6 @@ export function Wordmark({
       className={`inline-flex items-center gap-2 ${className}`}
       aria-label={`${BRAND_EN} 로고`}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={MASCOT_SRC}
         alt=""

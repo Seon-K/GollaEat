@@ -14,7 +14,6 @@ export function MascotLogo({
   alt = "골라잇",
 }: MascotLogoProps) {
   const img = (
-    // eslint-disable-next-line @next/next/no-img-element
     <img
       src={MASCOT_SRC}
       alt={alt}
