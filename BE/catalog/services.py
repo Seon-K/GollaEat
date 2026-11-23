@@ -155,6 +155,22 @@ def list_menus(params, repository=None, *, profile=None):
     open_now = _boolean_parameter(params, 'open_now')
 
     repository = repository or MockMenuRepository()
+    initial_page = callable(getattr(type(repository), 'initial_menu_page', None))
+    if initial_page and not query and not categories and not region and open_now is None and radius is None and sort in {
+            'menu_name_asc', 'price_asc', 'price_desc'}:
+        result = repository.initial_menu_page(sort=sort, page=page, limit=limit,
+            min_price=min_price if 'min_price' in params else None,
+            max_price=max_price if 'max_price' in params else None)
+        if result is not None:
+            selected, total = result
+            for menu in selected:
+                a, b = menu.get('latitude'), menu.get('longitude')
+                menu['distance_km'] = haversine_km(lat, lng, a, b) if lat is not None and a is not None and b is not None else None
+            pages = math.ceil(total / limit) if total else 0
+            return {'results': [_serialize(menu) for menu in selected],
+                'pagination': {'page': page, 'limit': limit, 'count': len(selected), 'total': total,
+                    'total_pages': pages, 'next_page': page + 1 if page < pages else None,
+                    'previous_page': page - 1 if page > 1 and total else None}}
     compact = callable(getattr(type(repository), 'menu_candidates', None))
     menus = repository.menu_candidates(
         min_price=min_price if 'min_price' in params else None,
