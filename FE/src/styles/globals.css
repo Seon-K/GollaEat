@@ -43,11 +43,28 @@ textarea {
   font: inherit;
 }
 
-:where(button, a[href], [role="button"], [role="option"], summary, select, label[for], input[type="checkbox"], input[type="radio"]):not(:disabled):not([aria-disabled="true"]) {
+:where(
+  button,
+  a[href],
+  [role="button"],
+  [role="option"],
+  [role="tab"],
+  [role="menuitem"],
+  [role="menuitemcheckbox"],
+  [role="menuitemradio"],
+  [role="switch"],
+  [role="checkbox"],
+  [role="radio"],
+  summary,
+  select,
+  label[for],
+  label:has(input:is([type="checkbox"], [type="radio"]):enabled),
+  input:is([type="button"], [type="submit"], [type="reset"], [type="checkbox"], [type="radio"], [type="range"])
+):not(:disabled):not([aria-disabled="true"]):not(.cursor-ns-resize):not(.cursor-grab):not(.cursor-grabbing) {
   cursor: pointer;
 }
 
-:where(button, input, select, [role="button"]):is(:disabled, [aria-disabled="true"]) {
+:where(:disabled, [aria-disabled="true"], label:has(input:is([type="checkbox"], [type="radio"]):disabled)) {
   cursor: not-allowed;
 }
 
