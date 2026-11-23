@@ -5,7 +5,7 @@ from .map_links import kakao_links
 
 
 ALLOWED_PARAMETERS = {'q', 'min_price', 'max_price', 'category', 'sort', 'page', 'limit',
-    'lat', 'lng', 'radius_km', 'region', 'open_now'}
+    'lat', 'lng', 'radius_km', 'region', 'open_now', 'restaurant_id', 'judgement_status'}
 SORT_OPTIONS = {'menu_name_asc', 'price_asc', 'price_desc', 'distance_asc', 'dietary'}
 RESTAURANT_PARAMETERS = {'q', 'brand', 'page', 'limit', 'lat', 'lng', 'radius_km', 'sort',
     'restaurant_type', 'category', 'region', 'open_now', 'min_price', 'max_price'}
@@ -52,6 +52,13 @@ class MenuQueryError(ValueError):
     def __init__(self, parameter, message):
         super().__init__(message)
         self.parameter = parameter
+
+
+def judgement_status_parameter(params):
+    status = params.get('judgement_status', '')
+    if status not in {'', 'match', 'needs_check', 'mismatch'}:
+        raise MenuQueryError('judgement_status', 'expected match, needs_check or mismatch')
+    return status
 
 
 def _integer_parameter(params, name, default, minimum, maximum=None):
@@ -139,6 +146,8 @@ def list_menus(params, repository=None, *, profile=None):
         raise MenuQueryError(unknown[0], f'unknown parameter: {unknown[0]}')
 
     query = _text_parameter(params, 'q', 100)
+    restaurant_id = _text_parameter(params, 'restaurant_id', 100)
+    judgement_status = judgement_status_parameter(params)
     categories = _menu_categories(params)
     min_price = _integer_parameter(params, 'min_price', 0, 0)
     max_price = _integer_parameter(params, 'max_price', None, 0)
@@ -155,8 +164,14 @@ def list_menus(params, repository=None, *, profile=None):
     open_now = _boolean_parameter(params, 'open_now')
 
     repository = repository or MockMenuRepository()
+    from .db_repository import DatabaseCatalogRepository
+    if isinstance(repository, DatabaseCatalogRepository):
+        from .dietary_search import indexed_menus
+        indexed = indexed_menus(params, repository, profile)
+        if indexed is not None:
+            return indexed
     initial_page = callable(getattr(type(repository), 'initial_menu_page', None))
-    if initial_page and not query and not categories and not region and open_now is None and radius is None and sort in {
+    if initial_page and not judgement_status and not restaurant_id and not query and not categories and not region and open_now is None and radius is None and sort in {
             'menu_name_asc', 'price_asc', 'price_desc'}:
         result = repository.initial_menu_page(sort=sort, page=page, limit=limit,
             min_price=min_price if 'min_price' in params else None,
@@ -176,7 +191,10 @@ def list_menus(params, repository=None, *, profile=None):
         min_price=min_price if 'min_price' in params else None,
         max_price=max_price if 'max_price' in params else None,
         query=query.casefold(), categories=categories, region=region,
+        **({'restaurant_id': restaurant_id} if restaurant_id else {}),
     ) if compact else repository.list_menus()
+    if restaurant_id:
+        menus = [menu for menu in menus if menu['restaurant_id'] == restaurant_id]
     if region or open_now is not None or lat is not None:
         # Coordinates/address are already joined in the compact ORM read.
         # Business hours are needed only when an opening-status filter is requested.
@@ -216,17 +234,23 @@ def list_menus(params, repository=None, *, profile=None):
             and (max_price is None or menu['price_amount'] <= max_price))
     ]
 
-    db_page = repository.ordered_menu_page(menus, sort, page, limit) if compact else None
     judgements = {}
-    if db_page is not None:
-        pass
-    elif sort == 'dietary':
+    if sort == 'dietary' or judgement_status:
         if profile is None:
             raise MenuQueryError('sort', 'dietary sort requires a session profile')
         from dietary.services import EvaluationContext, evaluate
         context = EvaluationContext(profile)
         context.prime([menu['menu_id'] for menu in menus])
         judgements = {menu['menu_id']: evaluate(profile, menu['menu_id'], context=context) for menu in menus}
+        context.flush()
+        if judgement_status:
+            if not context.criteria:
+                judgements = {mid: dict(j, status='needs_check', sort_key=[1, 0, mid]) for mid, j in judgements.items()}
+            menus = [m for m in menus if judgements[m['menu_id']]['status'] == judgement_status]
+    db_page = repository.ordered_menu_page(menus, sort, page, limit) if compact else None
+    if db_page is not None:
+        pass
+    elif sort == 'dietary':
         menus.sort(key=lambda menu: judgements[menu['menu_id']]['sort_key'])
     elif sort == 'price_asc':
         menus.sort(key=lambda menu: (menu['price_amount'] is None, menu['price_amount'] or 0, menu['menu_id']))

@@ -8,18 +8,23 @@ from .services import serialize_menu_detail
 from .categories import MENU_CATEGORIES
 
 
-def _personalized(request, result):
+def _personalized(request, result, profile=None):
     from dietary.views import owner
     from dietary.models import Favorite
     from dietary.services import EvaluationContext, evaluate
-    profile = owner(request)
-    context = EvaluationContext(profile)
-    context.prime([menu['menu_id'] for menu in result['results'] if 'judgement' not in menu])
-    saved = set(Favorite.objects.filter(profile=profile).values_list('menu_id', flat=True))
+    profile = profile if profile is not None else owner(request)
+    missing = [menu['menu_id'] for menu in result['results'] if 'judgement' not in menu]
+    context = EvaluationContext(profile) if missing else None
+    if context is not None:
+        context.prime(missing)
+    page_ids = [menu['menu_id'] for menu in result['results']]
+    saved = set(Favorite.objects.filter(profile=profile, menu_id__in=page_ids).values_list('menu_id', flat=True))
     for menu in result['results']:
         menu['saved'] = menu['menu_id'] in saved
         if 'judgement' not in menu:
             menu['judgement'] = evaluate(profile, menu['menu_id'], context=context)
+    if context is not None:
+        context.flush()
     return result
 
 
@@ -61,11 +66,11 @@ def menus(request):
             raise MenuQueryError('personalize', 'personalize must be true or false')
         params.pop('personalize', None)
         profile = None
-        if params.get('sort') == 'dietary':
+        if personalize == 'true' or params.get('sort') == 'dietary' or params.get('judgement_status'):
             from dietary.views import owner
             profile = owner(request)
         result = list_menus(params, _csv_repository(), profile=profile)
-        return JsonResponse(_personalized(request, result) if personalize == 'true' else result)
+        return JsonResponse(_personalized(request, result, profile) if personalize == 'true' else result)
     except CatalogDataError as exc:
         return _catalog_unavailable(exc)
     except MenuQueryError as exc:
@@ -106,6 +111,11 @@ def restaurants(request):
     if request.method != 'GET':
         return _method_not_allowed()
     try:
+        if any(key in request.GET for key in ('personalize', 'match_only', 'bounds', 'judgement_status', 'view')) or request.GET.get('sort') == 'dietary':
+            from .discovery import discover_restaurants
+            from dietary.views import owner
+            profile = owner(request) if request.GET.get('personalize') == 'true' else None
+            return JsonResponse(discover_restaurants(request.GET, _csv_repository(), profile))
         return JsonResponse(list_restaurants(request.GET, _csv_repository()))
     except MenuQueryError as exc:
         return JsonResponse(
