@@ -1,4 +1,4 @@
-import { ApiError } from "@/lib/api/errors";
+import { ApiError, isRequestCancelled } from "@/lib/api/errors";
 
 export function ApiLoading({ label = "불러오는 중…" }: { label?: string }) {
   return (
@@ -17,6 +17,7 @@ export function ApiErrorPanel({
   error: unknown;
   onRetry?: () => void;
 }) {
+  if (isRequestCancelled(error)) return null;
   const message =
     error instanceof ApiError
       ? error.message

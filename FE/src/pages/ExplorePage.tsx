@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpDown,
   ChevronDown,
@@ -19,6 +19,7 @@ import { NearbyMap } from "@/components/NearbyMap";
 import { ASAN_ORIGIN } from "@/data/mock";
 import { useFavorites } from "@/hooks/useFavoriteToggle";
 import { useGeolocation, type UserLocation } from "@/hooks/useGeolocation";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { CATEGORY_FILTER_LABEL } from "@/lib/api/criteriaMap";
 import { apiKeys } from "@/lib/api/keys";
 import { getDataProvider } from "@/lib/api/providers";
@@ -67,6 +68,10 @@ export default function ExplorePage() {
   const [manualOrigin, setManualOrigin] = useState<UserLocation | null>(null);
   const [locationOpen, setLocationOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [composing, setComposing] = useState(false);
+  const debouncedQuery = useDebouncedValue(query.trim(), 300, composing);
+  const searchPending = composing || query.trim() !== debouncedQuery;
+  const qc = useQueryClient();
   const [sort, setSort] = useState<SortOption>("match");
   const [filter, setFilter] = useState<CategoryFilter>("all");
 
@@ -75,24 +80,25 @@ export default function ExplorePage() {
 
   const conditionBanner = formatConditionBanner(allergens, restrictions);
 
-  const menusQuery = useQuery({
-    queryKey: apiKeys.menus({
-      q: query.trim() || undefined,
+  const searchParams = useMemo(() => ({
+      q: debouncedQuery || undefined,
       personalize: true,
       lat: origin.lat,
       lng: origin.lng,
       limit: 40,
-    }),
-    queryFn: () =>
-      getDataProvider().getMenus({
-        q: query.trim() || undefined,
-        personalize: true,
-        lat: origin.lat,
-        lng: origin.lng,
-        limit: 40,
-      }),
-    enabled: locationReady,
+  }), [debouncedQuery, origin.lat, origin.lng]);
+  const menusQuery = useQuery({
+    queryKey: apiKeys.menus(searchParams),
+    queryFn: ({ signal }) => getDataProvider().getMenus(searchParams, { signal }),
+    enabled: locationReady && !searchPending,
   });
+  useEffect(() => {
+    if (searchPending || !locationReady) void qc.cancelQueries({ queryKey: apiKeys.menus(searchParams), exact: true });
+  }, [qc, searchPending, locationReady, searchParams]);
+  useEffect(() => () => {
+    void qc.cancelQueries({ queryKey: apiKeys.menus(searchParams), exact: true });
+  }, [qc, searchParams]);
+  const loading = !locationReady || searchPending || menusQuery.isLoading;
 
   const sortTriggerLabel =
     sort === "match"
@@ -114,6 +120,7 @@ export default function ExplorePage() {
   }, [menusQuery.data?.items, origin]);
 
   const mapMarkers = useMemo(() => {
+    if (searchPending || !locationReady) return [];
     const seen = new Set<string>();
     const markers: { id: string; name: string; lat: number; lng: number }[] =
       [];
@@ -130,7 +137,7 @@ export default function ExplorePage() {
       });
     }
     return markers;
-  }, [itemsWithDistance]);
+  }, [itemsWithDistance, searchPending, locationReady]);
 
   const cards: MenuCardModel[] = useMemo(() => {
     let list = [...itemsWithDistance];
@@ -198,6 +205,8 @@ export default function ExplorePage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onCompositionStart={() => setComposing(true)}
+            onCompositionEnd={(e) => { setQuery(e.currentTarget.value); setComposing(false); }}
             placeholder="메뉴명 또는 식당명 검색"
             className="w-full bg-transparent text-[14px] outline-none placeholder:text-muted"
             aria-label="메뉴명 또는 식당명 검색"
@@ -240,15 +249,15 @@ export default function ExplorePage() {
             />
           </div>
 
-          {!locationReady || menusQuery.isLoading ? <ApiLoading /> : null}
-          {menusQuery.isError ? (
+          {loading ? <ApiLoading /> : null}
+          {locationReady && !searchPending && menusQuery.isError ? (
             <ApiErrorPanel
               error={menusQuery.error}
               onRetry={() => void menusQuery.refetch()}
             />
           ) : null}
 
-          {locationReady && !menusQuery.isLoading && !menusQuery.isError ? (
+          {!loading && !menusQuery.isError ? (
             <div className="space-y-3">
               {cards.map((item) => (
                 <MenuCard

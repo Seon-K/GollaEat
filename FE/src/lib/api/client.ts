@@ -1,4 +1,6 @@
 import { ApiError } from "@/lib/api/errors";
+import { controlledRequest, type ApiRequestOptions } from "@/lib/api/requestControl";
+export type { ApiRequestOptions } from "@/lib/api/requestControl";
 
 type JsonBody = unknown;
 
@@ -43,24 +45,28 @@ async function parseBody(res: Response): Promise<unknown> {
 export async function ensureSession(): Promise<void> {
   if (csrfToken) return;
   if (!sessionInitPromise) {
-    sessionInitPromise = (async () => {
+    const init = controlledRequest(async (signal) => {
       const res = await fetch("/api/session", {
         method: "GET",
         credentials: "same-origin",
         headers: { Accept: "application/json" },
+        signal,
       });
       const body = await parseBody(res);
+      signal.throwIfAborted();
       if (!res.ok) {
-        sessionInitPromise = null;
         throw new ApiError(res.status, body);
       }
       const token = (body as { csrf_token?: string })?.csrf_token;
       if (!token) {
-        sessionInitPromise = null;
         throw new ApiError(500, body, "csrf_token missing in /api/session");
       }
       csrfToken = token;
-    })();
+    });
+    sessionInitPromise = init;
+    void init.catch(() => {
+      if (sessionInitPromise === init) sessionInitPromise = null;
+    });
   }
   await sessionInitPromise;
 }
@@ -70,14 +76,15 @@ export type ApiQuery = Record<
   string | number | boolean | null | undefined
 >;
 
-async function request<T>(
+async function sendRequest<T>(
   method: string,
   path: string,
   options: {
     body?: JsonBody;
     query?: ApiQuery;
     _retried?: boolean;
-  } = {},
+  },
+  signal: AbortSignal,
 ): Promise<T> {
   if (!path.startsWith("/api/")) {
     throw new Error(`api client path must start with /api/: ${path}`);
@@ -86,7 +93,9 @@ async function request<T>(
     throw new Error(`api path must not end with /: ${path}`);
   }
 
+  signal.throwIfAborted();
   await ensureSession();
+  signal.throwIfAborted();
 
   const url = new URL(path, "http://local.invalid");
   if (options.query) {
@@ -112,17 +121,19 @@ async function request<T>(
     method,
     credentials: "same-origin",
     headers,
+    signal,
     body:
       options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
 
   const body = await parseBody(res);
+  signal.throwIfAborted();
 
   if (res.status === 403 && MUTATING.has(method) && !options._retried) {
     csrfToken = null;
     sessionInitPromise = null;
     await ensureSession();
-    return request<T>(method, path, { ...options, _retried: true });
+    return sendRequest<T>(method, path, { ...options, _retried: true }, signal);
   }
 
   if (!res.ok) {
@@ -138,16 +149,20 @@ async function request<T>(
   return body as T;
 }
 
-export const apiGet = <T>(path: string, query?: ApiQuery) =>
-  request<T>("GET", path, { query });
+function request<T>(method: string, path: string, payload: { body?: JsonBody; query?: ApiQuery }, options?: ApiRequestOptions) {
+  return controlledRequest((signal) => sendRequest<T>(method, path, payload, signal), options);
+}
 
-export const apiPost = <T>(path: string, body?: JsonBody) =>
-  request<T>("POST", path, { body });
+export const apiGet = <T>(path: string, query?: ApiQuery, options?: ApiRequestOptions) =>
+  request<T>("GET", path, { query }, options);
 
-export const apiPut = <T>(path: string, body?: JsonBody) =>
-  request<T>("PUT", path, { body });
+export const apiPost = <T>(path: string, body?: JsonBody, options?: ApiRequestOptions) =>
+  request<T>("POST", path, { body }, options);
 
-export const apiPatch = <T>(path: string, body?: JsonBody) =>
-  request<T>("PATCH", path, { body });
+export const apiPut = <T>(path: string, body?: JsonBody, options?: ApiRequestOptions) =>
+  request<T>("PUT", path, { body }, options);
 
-export const apiDelete = <T>(path: string) => request<T>("DELETE", path);
+export const apiPatch = <T>(path: string, body?: JsonBody, options?: ApiRequestOptions) =>
+  request<T>("PATCH", path, { body }, options);
+
+export const apiDelete = <T>(path: string, options?: ApiRequestOptions) => request<T>("DELETE", path, {}, options);

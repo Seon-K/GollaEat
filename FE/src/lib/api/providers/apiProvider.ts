@@ -38,12 +38,12 @@ export const apiProvider: DataProvider = {
     return res.criteria ?? [];
   },
 
-  getProfile: () => apiGet<ApiProfile>("/api/profile"),
+  getProfile: (options) => apiGet<ApiProfile>("/api/profile", undefined, options),
 
   putProfile: (criteria) =>
     apiPut<ApiProfile>("/api/profile", { criteria }),
 
-  async getMenus(params = {}) {
+  async getMenus(params = {}, options) {
     const res = await apiGet<ApiMenusResponse>("/api/menus", {
       q: params.q,
       page: params.page,
@@ -56,15 +56,15 @@ export const apiProvider: DataProvider = {
       min_price: params.min_price,
       max_price: params.max_price,
       personalize: params.personalize ?? true,
-    });
+    }, options);
     return {
       items: (res.results ?? []).map(adaptMenuListItem),
       pagination: adaptPagination(res.pagination),
     };
   },
 
-  async getMenu(menuId) {
-    const res = await apiGet<ApiMenuDetail>(`/api/menus/${menuId}`);
+  async getMenu(menuId, options) {
+    const res = await apiGet<ApiMenuDetail>(`/api/menus/${menuId}`, undefined, options);
     return adaptMenuDetail(res);
   },
 
@@ -84,10 +84,10 @@ export const apiProvider: DataProvider = {
     };
   },
 
-  async postJudgement(menuId) {
+  async postJudgement(menuId, options) {
     const res = await apiPost<ApiJudgement>("/api/judgements", {
       menu_id: menuId,
-    });
+    }, options);
     return adaptJudgement(res);
   },
 
@@ -146,7 +146,7 @@ export const apiProvider: DataProvider = {
       location: input.location,
       radius_m: input.radius_m,
       new_conversation: input.new_conversation,
-    });
+    }, { timeoutMs: 60_000 });
     return adaptChatResponse(res);
   },
 };
