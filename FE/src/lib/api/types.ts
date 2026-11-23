@@ -10,6 +10,8 @@ export type ServerJudgementStatus = "match" | "needs_check" | "mismatch" | strin
 export type UiJudgementStatus = "match" | "check" | "mismatch";
 
 export interface ApiSession {
+  profile?: ApiProfile;
+  cache_identity?: string;
   csrf_token: string;
   identity: string;
 }
@@ -86,6 +88,7 @@ export interface ApiJudgementReason {
 }
 
 export interface ApiJudgement {
+  guidance?: { label: string; message: string; notice: string; basis: string };
   component_id: string;
   status: ServerJudgementStatus;
   reasons: ApiJudgementReason[];
@@ -111,7 +114,7 @@ export interface ApiMenuListItem {
   distance_km: number | null;
   brand?: string;
   saved?: boolean;
-  judgement?: ApiJudgement;
+  judgement?: ApiJudgement | null;
   /** 기타 원본 키 — 목록 샘플에 다수 */
   [key: string]: unknown;
 }
@@ -151,6 +154,9 @@ export interface ApiMenuDetail {
 }
 
 export interface ApiRestaurant {
+  dietary_summary?: { match_menu_count: number; check_menu_count: number; mismatch_menu_count: number };
+  representative_menu?: ApiMenuListItem | null;
+  personalization?: { applied: boolean; profile_configured: boolean };
   restaurant_id: string;
   restaurant_name: string;
   latitude: number;
@@ -206,7 +212,7 @@ export interface ApiFavorite {
   menu_id: string;
   menu?: ApiFavoriteMenu;
   catalog_status?: string;
-  judgement?: ApiJudgement;
+  judgement?: ApiJudgement | null;
 }
 
 export interface ApiFavoritesResponse {
@@ -220,6 +226,8 @@ export interface ApiFavoriteCreateResponse {
 }
 
 export interface ApiReview {
+  menu_name?: string;
+  restaurant_name?: string;
   id: number;
   menu_id: string;
   body: string;
@@ -279,4 +287,16 @@ export interface ApiChatResponse {
 export interface ApiMenuCategoriesResponse {
   categories?: string[];
   [key: string]: unknown;
+}
+
+
+export type ReportCategory = "menu_price" | "ingredients_allergens" | "business" | "other";
+export type ReportInput = ({ menu_id: string; restaurant_id?: string } | { restaurant_id: string; menu_id?: string }) & {
+  category: ReportCategory; content: string;
+};
+export interface ApiReport {
+  report_id: number; menu_id: string | null; restaurant_id: string | null;
+  category: ReportCategory; content: string;
+  status: "pending" | "reviewing" | "resolved" | "rejected";
+  created_at: string; reviewed_at: string | null;
 }

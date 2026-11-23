@@ -1,13 +1,8 @@
+import { LoadingSkeleton, type SkeletonVariant } from "./LoadingSkeleton";
 import { ApiError } from "@/lib/api/errors";
 
-export function ApiLoading({ label = "불러오는 중…" }: { label?: string }) {
-  return (
-    <div className="space-y-3 py-2" aria-busy="true" aria-label={label}>
-      <div className="h-24 animate-pulse rounded-2xl bg-[#eef1ef]" />
-      <div className="h-24 animate-pulse rounded-2xl bg-[#eef1ef]" />
-      <div className="h-24 animate-pulse rounded-2xl bg-[#eef1ef]" />
-    </div>
-  );
+export function ApiLoading({ label, variant = "list" }: { label?: string; variant?: SkeletonVariant }) {
+  return <LoadingSkeleton variant={variant} label={label} />;
 }
 
 export function ApiErrorPanel({

@@ -17,6 +17,7 @@ export const apiKeys = {
   favorites: () => [...apiKeys.all, "favorites"] as const,
   reviews: (menuId?: string) =>
     [...apiKeys.all, "reviews", menuId ?? "all"] as const,
+  myReviews: (page: number) => [...apiKeys.all, "reviews", "mine", page] as const,
   judgement: (menuId: string) =>
     [...apiKeys.all, "judgement", menuId] as const,
 };

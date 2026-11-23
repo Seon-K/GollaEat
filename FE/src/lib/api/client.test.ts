@@ -6,6 +6,8 @@ import {
   apiPut,
   ensureSession,
   getCsrfToken,
+  getBootstrapProfile,
+  onSessionIdentityChange,
 } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
 
@@ -18,6 +20,22 @@ describe("api client", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     __resetApiClientForTests();
+  });
+
+  it("shares concurrent bootstrap requests and returns the session profile without another GET", async () => {
+    const profile = { criteria: ["allergen-milk"], setup_completed: true };
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ csrf_token: "tok", profile, cache_identity: "guest" }), { status: 200 }));
+    const profiles = await Promise.all([getBootstrapProfile(), getBootstrapProfile(), getBootstrapProfile()]);
+    expect(profiles).toEqual([profile, profile, profile]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not reuse the prior user's bootstrap profile after a session change", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ csrf_token: "tok", cache_identity: "first", profile: { criteria: ["allergen-milk"], setup_completed: true } }), { status: 200 }));
+    await getBootstrapProfile();
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ criteria: [] }), { status: 200, headers: { "X-GollaEat-Session": "second" } }));
+    await apiGet("/api/restaurants");
+    expect(await getBootstrapProfile()).toBeNull();
   });
 
   it("ensureSession stores csrf_token", async () => {
@@ -34,6 +52,22 @@ describe("api client", () => {
       "/api/session",
       expect.objectContaining({ method: "GET" }),
     );
+  });
+
+  it("notifies cache owners when a normal API response belongs to another session", async () => {
+    const changed = vi.fn();
+    const unsubscribe = onSessionIdentityChange(changed);
+    const response = (identity: string) => new Response(JSON.stringify({ csrf_token: "token", cache_identity: identity }), {
+      status: 200, headers: { "content-type": "application/json", "X-GollaEat-Session": identity },
+    });
+    vi.mocked(fetch).mockResolvedValueOnce(response("one")).mockResolvedValueOnce(response("one")).mockResolvedValueOnce(response("two"));
+    try {
+      await ensureSession();
+      await apiGet("/api/profile");
+      expect(changed).not.toHaveBeenCalled();
+      await apiGet("/api/profile");
+      expect(changed).toHaveBeenCalledTimes(1);
+    } finally { unsubscribe(); }
   });
 
   it("attaches X-CSRFToken on PUT", async () => {

@@ -104,6 +104,7 @@ export function adaptReasoningRows(judgement: ApiJudgement): ReasoningRowUi[] {
 }
 
 export interface JudgementUi {
+  guidance?: ApiJudgement["guidance"];
   componentId: string;
   status: UiJudgementStatus;
   reasons: ReasoningRowUi[];
@@ -119,6 +120,7 @@ export interface JudgementUi {
 
 export function adaptJudgement(raw: ApiJudgement): JudgementUi {
   return {
+    ...(raw.guidance && [raw.guidance.label, raw.guidance.message, raw.guidance.notice, raw.guidance.basis].every((value) => typeof value === "string") ? { guidance: raw.guidance } : {}),
     componentId: raw.component_id,
     status: mapServerStatus(raw.status),
     reasons: adaptReasoningRows(raw),
@@ -161,6 +163,9 @@ export function adaptMapLinks(r: {
 }
 
 export interface RestaurantUi {
+  dietarySummary?: ApiRestaurant["dietary_summary"];
+  representativeMenu?: MenuListItemUi | null;
+  personalization?: ApiRestaurant["personalization"];
   id: string;
   name: string;
   lat: number;
@@ -174,6 +179,9 @@ export interface RestaurantUi {
 
 export function adaptRestaurant(r: ApiRestaurant): RestaurantUi {
   return {
+    ...(r.dietary_summary ? { dietarySummary: r.dietary_summary } : {}),
+    ...("representative_menu" in r ? { representativeMenu: r.representative_menu ? adaptMenuListItem({ ...r.representative_menu, judgement: r.representative_menu.judgement ?? undefined }) : null } : {}),
+    ...(r.personalization ? { personalization: r.personalization } : {}),
     id: r.restaurant_id,
     name: r.restaurant_name,
     lat: r.latitude,

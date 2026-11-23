@@ -7,9 +7,10 @@ import {
   adaptRestaurant,
   mapServerStatus,
 } from "@/lib/api/adapters";
-import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api/client";
+import { apiDelete, apiGet, apiPost, apiPut, apiPatch } from "@/lib/api/client";
 import type {
   ApiChatResponse,
+  ApiReport,
   ApiCommunicationResponse,
   ApiDietaryCriteriaResponse,
   ApiFavoriteCreateResponse,
@@ -45,6 +46,9 @@ export const apiProvider: DataProvider = {
 
   async getMenus(params = {}) {
     const res = await apiGet<ApiMenusResponse>("/api/menus", {
+      region: params.region,
+      judgement_status: params.judgement_status,
+      restaurant_id: params.restaurant_id,
       q: params.q,
       page: params.page,
       limit: params.limit,
@@ -70,6 +74,15 @@ export const apiProvider: DataProvider = {
 
   async getRestaurants(params = {}) {
     const res = await apiGet<ApiRestaurantsResponse>("/api/restaurants", {
+      view: params.view,
+      region: params.region,
+      judgement_status: params.judgement_status,
+      bounds: params.bounds,
+      personalize: params.personalize,
+      match_only: params.match_only,
+      category: params.category,
+      min_price: params.min_price,
+      max_price: params.max_price,
       q: params.q,
       page: params.page,
       limit: params.limit,
@@ -125,11 +138,23 @@ export const apiProvider: DataProvider = {
     await apiDelete<{ deleted?: boolean }>(`/api/favorites/${id}`);
   },
 
+  async createReport(input) {
+    return apiPost<ApiReport>("/api/reports", input);
+  },
+
   async getReviews(menuId) {
     const res = await apiGet<ApiReviewsResponse>("/api/reviews", {
       menu_id: menuId,
     });
     return res.reviews ?? [];
+  },
+
+  async updateReview(id, body) { return apiPatch<ApiReview>(`/api/reviews/${id}`, { body }); },
+  async deleteReview(id) { await apiDelete(`/api/reviews/${id}`); },
+
+  async getMyReviews(page = 1) {
+    const res = await apiGet<ApiReviewsResponse>("/api/reviews", { mine: true, page, limit: 20 });
+    return { items: res.reviews ?? [], pagination: adaptPagination(res.pagination) };
   },
 
   async createReview(input) {
