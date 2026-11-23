@@ -11,8 +11,10 @@ export interface MapMarker {
 
 interface KakaoMapViewProps {
   markers: MapMarker[];
-  /** 마커가 없을 때 중심 */
+  /** 지도 중심(현재 위치). 마커가 있어도 우선 기준으로 사용 */
   fallbackCenter?: { lat: number; lng: number };
+  /** 현재 위치 마커 표시 */
+  showUserLocation?: boolean;
   className?: string;
   heightClassName?: string;
   ariaLabel?: string;
@@ -21,6 +23,7 @@ interface KakaoMapViewProps {
 export function KakaoMapView({
   markers,
   fallbackCenter = { lat: 36.7898, lng: 127.0017 },
+  showUserLocation = false,
   className = "",
   heightClassName = "h-40",
   ariaLabel = "지도",
@@ -28,6 +31,10 @@ export function KakaoMapView({
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+
+  const markerKey = markers
+    .map((m) => `${m.id}:${m.lat.toFixed(5)},${m.lng.toFixed(5)}`)
+    .join("|");
 
   useEffect(() => {
     const el = containerRef.current;
@@ -46,14 +53,32 @@ export function KakaoMapView({
       .then((kakao) => {
         if (cancelled || !containerRef.current) return;
 
-        const centerSrc = markers[0] ?? fallbackCenter;
-        const center = new kakao.maps.LatLng(centerSrc.lat, centerSrc.lng);
+        const center = new kakao.maps.LatLng(
+          fallbackCenter.lat,
+          fallbackCenter.lng,
+        );
         const map = new kakao.maps.Map(containerRef.current, {
           center,
-          level: markers.length > 1 ? 5 : 3,
+          level: markers.length > 1 ? 5 : 4,
         });
 
         const bounds = new kakao.maps.LatLngBounds();
+        bounds.extend(center);
+
+        if (showUserLocation) {
+          const userMarker = new kakao.maps.Marker({
+            position: center,
+            map,
+            title: "현재 위치",
+          });
+          const userInfo = new kakao.maps.InfoWindow({
+            content: `<div style="padding:6px 10px;font-size:12px;font-weight:600;white-space:nowrap;">현재 위치</div>`,
+          });
+          kakao.maps.event.addListener(userMarker, "click", () => {
+            userInfo.open(map, userMarker);
+          });
+        }
+
         for (const m of markers) {
           const pos = new kakao.maps.LatLng(m.lat, m.lng);
           bounds.extend(pos);
@@ -69,10 +94,11 @@ export function KakaoMapView({
             info.open(map, marker);
           });
         }
-        if (markers.length > 1) {
+
+        if (markers.length > 0) {
           map.setBounds(bounds);
-        } else if (markers.length === 1) {
-          map.setCenter(new kakao.maps.LatLng(markers[0].lat, markers[0].lng));
+        } else {
+          map.setCenter(center);
         }
 
         setReady(true);
@@ -87,7 +113,14 @@ export function KakaoMapView({
     return () => {
       cancelled = true;
     };
-  }, [markers, fallbackCenter.lat, fallbackCenter.lng]);
+    // markerKey로 마커 변경만 추적 (배열 참조 무시)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    markerKey,
+    fallbackCenter.lat,
+    fallbackCenter.lng,
+    showUserLocation,
+  ]);
 
   return (
     <div
