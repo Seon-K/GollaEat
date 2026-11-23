@@ -154,13 +154,37 @@ def list_menus(params, repository=None, *, profile=None):
     region = _text_parameter(params, 'region', 100).casefold()
     open_now = _boolean_parameter(params, 'open_now')
 
-    menus = (repository or MockMenuRepository()).list_menus()
+    repository = repository or MockMenuRepository()
+    initial_page = callable(getattr(type(repository), 'initial_menu_page', None))
+    if initial_page and not query and not categories and not region and open_now is None and radius is None and sort in {
+            'menu_name_asc', 'price_asc', 'price_desc'}:
+        result = repository.initial_menu_page(sort=sort, page=page, limit=limit,
+            min_price=min_price if 'min_price' in params else None,
+            max_price=max_price if 'max_price' in params else None)
+        if result is not None:
+            selected, total = result
+            for menu in selected:
+                a, b = menu.get('latitude'), menu.get('longitude')
+                menu['distance_km'] = haversine_km(lat, lng, a, b) if lat is not None and a is not None and b is not None else None
+            pages = math.ceil(total / limit) if total else 0
+            return {'results': [_serialize(menu) for menu in selected],
+                'pagination': {'page': page, 'limit': limit, 'count': len(selected), 'total': total,
+                    'total_pages': pages, 'next_page': page + 1 if page < pages else None,
+                    'previous_page': page - 1 if page > 1 and total else None}}
+    compact = callable(getattr(type(repository), 'menu_candidates', None))
+    menus = repository.menu_candidates(
+        min_price=min_price if 'min_price' in params else None,
+        max_price=max_price if 'max_price' in params else None,
+        query=query.casefold(), categories=categories, region=region,
+    ) if compact else repository.list_menus()
     if region or open_now is not None or lat is not None:
-        restaurants = {r['restaurant_id']: r for r in repository.list_restaurants()}
+        # Coordinates/address are already joined in the compact ORM read.
+        # Business hours are needed only when an opening-status filter is requested.
+        restaurants = {r['restaurant_id']: r for r in repository.list_restaurants()} if not compact or open_now is not None else {}
         selected = []
         for raw in menus:
             menu = dict(raw)
-            restaurant = restaurants.get(menu['restaurant_id'], {})
+            restaurant = restaurants.get(menu['restaurant_id'], menu if compact else {})
             if region and region not in restaurant.get('address', '').casefold():
                 continue
             status = restaurant.get('operating_status', 'unknown')
@@ -192,8 +216,11 @@ def list_menus(params, repository=None, *, profile=None):
             and (max_price is None or menu['price_amount'] <= max_price))
     ]
 
+    db_page = repository.ordered_menu_page(menus, sort, page, limit) if compact else None
     judgements = {}
-    if sort == 'dietary':
+    if db_page is not None:
+        pass
+    elif sort == 'dietary':
         if profile is None:
             raise MenuQueryError('sort', 'dietary sort requires a session profile')
         from dietary.services import EvaluationContext, evaluate
@@ -212,7 +239,11 @@ def list_menus(params, repository=None, *, profile=None):
 
     total = len(menus)
     start = (page - 1) * limit
-    selected = menus[start:start + limit]
+    selected = db_page if db_page is not None else menus[start:start + limit]
+    if compact and db_page is None and selected:
+        summaries = repository.menu_summaries([menu['menu_id'] for menu in selected])
+        selected = [dict(summaries[menu['menu_id']], distance_km=menu.get('distance_km'))
+                    for menu in selected if menu['menu_id'] in summaries]
     total_pages = math.ceil(total / limit) if total else 0
 
     return {
@@ -255,10 +286,12 @@ def list_restaurants(params, repository):
         if radius <= 0:
             raise MenuQueryError('radius_km', 'radius_km must be positive')
 
-    restaurants = repository.list_restaurants()
     region = _text_parameter(params, 'region', 100).casefold()
     category = _text_parameter(params, 'category', 100).casefold()
     open_now = _boolean_parameter(params, 'open_now')
+    compact = callable(getattr(type(repository), 'restaurant_candidates', None))
+    restaurants = (repository.restaurant_candidates(include_hours=open_now is not None)
+                   if compact else repository.list_restaurants())
     if region:
         restaurants = [r for r in restaurants if region in r['address'].casefold()]
     if category:
@@ -270,14 +303,17 @@ def list_restaurants(params, repository):
         maximum = _integer_parameter(params, 'max_price', None, 0)
         if maximum is not None and minimum > maximum:
             raise MenuQueryError('min_price', 'min_price must not exceed max_price')
-        prices = {}
-        eligible = set()
-        for m in repository.list_menus():
-            price = m.get('price_amount')
-            if price is not None:
-                prices[m['restaurant_id']] = min(prices.get(m['restaurant_id'], price), price)
-                if price >= minimum and (maximum is None or price <= maximum):
-                    eligible.add(m['restaurant_id'])
+        if compact:
+            prices, eligible = repository.restaurant_prices(minimum, maximum)
+        else:
+            prices = {}
+            eligible = set()
+            for m in repository.list_menus():
+                price = m.get('price_amount')
+                if price is not None:
+                    prices[m['restaurant_id']] = min(prices.get(m['restaurant_id'], price), price)
+                    if price >= minimum and (maximum is None or price <= maximum):
+                        eligible.add(m['restaurant_id'])
         restaurants = [dict(r, min_menu_price=prices.get(r['restaurant_id'])) for r in restaurants
                        if ('min_price' not in params and 'max_price' not in params) or r['restaurant_id'] in eligible]
     restaurant_type = _text_parameter(params, 'restaurant_type', 50)
@@ -299,7 +335,9 @@ def list_restaurants(params, repository):
             if normalize_brand(restaurant['brand']) == normalized_brand
         ]
 
-    coordinates = repository.coordinates() if has_location else {}
+    coordinates = ({r['restaurant_id']: (r['latitude'], r['longitude']) for r in restaurants
+                    if r.get('latitude') is not None and r.get('longitude') is not None}
+                   if compact else repository.coordinates()) if has_location else {}
     restaurants = [dict(item) for item in restaurants]
     for item in restaurants:
         point = coordinates.get(item['restaurant_id'])
@@ -320,6 +358,10 @@ def list_restaurants(params, repository):
     total = len(restaurants)
     start = (page - 1) * limit
     selected = restaurants[start:start + limit]
+    if compact and open_now is None and selected:
+        summaries = repository.restaurant_summaries([r['restaurant_id'] for r in selected])
+        selected = [dict(summaries[r['restaurant_id']], **r) for r in selected
+                    if r['restaurant_id'] in summaries]
     total_pages = math.ceil(total / limit) if total else 0
 
     return {

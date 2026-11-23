@@ -1,16 +1,49 @@
 """ORM read boundary. No source CSV is opened by this repository."""
-from .models import Menu, Restaurant, MenuComponent, AllergenLink
+from .models import Menu, Restaurant, MenuComponent, AllergenLink, FoodDeclaration, OptionGroup, BusinessHours, Closure
 from .operations import operating_status, source_json, declaration_json, component_json, declared_tags
 from .operations import official_menu_allergens
 from .analysis_reference import analysis_json
 from .map_links import kakao_links
 from django.core.exceptions import ValidationError
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q, F, Min, Count, Exists, OuterRef, prefetch_related_objects
+from django.db.models.functions import Lower, Collate
+from django.db import connection
+from .query_expressions import UnicodeCasefold
+
+
+# Keep exceptional Unicode strings for the exact Python casefold check.
+_COMPLEX_TEXT = r'[^\x01-\x7f가-힣]'
+
+
+def _contains_candidates(field, value):
+    return Q(**{field + '__icontains': value}) | Q(**{field + '__regex': _COMPLEX_TEXT})
+
+
+def _simple_sort_text(value):
+    return all(ord(c) < 128 or '가' <= c <= '힣' for c in value)
 
 
 class DatabaseCatalogRepository:
     def _restaurants(self):
-        return Restaurant.objects.select_related('hours_source').prefetch_related('business_hours', 'closures__source')
+        return Restaurant.objects.select_related('hours_source').annotate(
+            _catalog_has_hours=Exists(BusinessHours.objects.filter(restaurant_id=OuterRef('pk'))),
+            _catalog_has_closures=Exists(Closure.objects.filter(restaurant_id=OuterRef('pk'))))
+
+    def _restaurant_rows(self, queryset):
+        rows = list(queryset)
+        for relation, flag in [('business_hours', '_catalog_has_hours'), ('closures', '_catalog_has_closures')]:
+            populated = []
+            for row in rows:
+                if getattr(row, flag):
+                    populated.append(row)
+                else:
+                    empty = getattr(row, relation).none()
+                    row.__dict__.setdefault('_prefetched_objects_cache', {})[relation] = empty
+            if populated:
+                lookup = (Prefetch('closures', queryset=Closure.objects.select_related('source'))
+                          if relation == 'closures' else 'business_hours')
+                prefetch_related_objects(populated, lookup)
+        return rows
 
     def _restaurant(self, row):
         result = dict(row.data)
@@ -45,16 +78,118 @@ class DatabaseCatalogRepository:
         return result
 
     def list_restaurants(self):
-        return [self._restaurant(row) for row in self._restaurants().order_by('place_id')]
+        return [self._restaurant(row) for row in self._restaurant_rows(self._restaurants().order_by('place_id'))]
 
     def get_restaurant(self, restaurant_id):
-        row = self._restaurants().filter(pk=restaurant_id).first()
-        return self._restaurant(row) if row else None
+        rows = self._restaurant_rows(self._restaurants().filter(pk=restaurant_id))
+        return self._restaurant(rows[0]) if rows else None
 
     def coordinates(self):
-        return {row['restaurant_id']: (row['latitude'], row['longitude'])
-                for row in self.list_restaurants()
-                if row.get('latitude') is not None and row.get('longitude') is not None}
+        return {pk: (lat, lng) for pk, lat, lng in Restaurant.objects.filter(
+            latitude__isnull=False, longitude__isnull=False).values_list('pk', 'latitude', 'longitude')}
+
+    def menu_candidates(self, *, min_price=None, max_price=None, query='', categories=(), region=''):
+        """Read only search keys, never full source JSON or analysis/evidence.
+
+        Keep Python casefold/alias and Haversine semantics shared with CSV mode.
+        Full menu payloads are fetched only after pagination.
+        """
+        rows = Menu.objects.all()
+        if min_price is not None:
+            rows = rows.filter(price_amount__gte=min_price)
+        if max_price is not None:
+            rows = rows.filter(price_amount__lte=max_price)
+        # PostgreSQL text parameters cannot contain NUL; let the exact Python
+        # check handle such input without sending it as a database parameter.
+        if query and '\x00' not in query:
+            rows = rows.filter(_contains_candidates('name', query)
+                | _contains_candidates('restaurant__name', query)
+                | _contains_candidates('restaurant__brand', query)
+                | Q(data__has_key='restaurant_search_names'))
+        if region and '\x00' not in region:
+            rows = rows.filter(_contains_candidates('restaurant__address', region))
+        if categories and not any('\x00' in category for category in categories):
+            matching = Q(category__regex=_COMPLEX_TEXT)
+            for category in categories:
+                matching |= Q(category__iexact=category)
+                matching |= Q(category='', restaurant__category__iexact=category)
+            matching |= Q(category='', restaurant__category__regex=_COMPLEX_TEXT)
+            rows = rows.filter(matching)
+        fields = ('pk', 'name', 'restaurant_id', 'restaurant__name', 'restaurant__brand',
+            'category', 'restaurant__category', 'price_amount', 'restaurant__latitude',
+            'restaurant__longitude', 'restaurant__address', 'data__restaurant_search_names')
+        return [{'menu_id': pk, 'menu_name': name, 'restaurant_id': rid,
+            'restaurant_name': rname, 'brand': brand, 'category': category or rcategory,
+            'price_amount': price, 'latitude': lat, 'longitude': lng, 'address': address,
+            'restaurant_search_names': aliases or []}
+            for pk, name, rid, rname, brand, category, rcategory, price, lat, lng, address, aliases
+            in rows.values_list(*fields)]
+
+    def menu_summaries(self, menu_ids):
+        return {row.pk: self._menu(row) for row in Menu.objects.select_related('restaurant').filter(pk__in=menu_ids)}
+
+    def initial_menu_page(self, *, sort, page, limit, min_price=None, max_price=None):
+        if connection.vendor not in {'postgresql', 'sqlite'}:
+            return None
+        rows = Menu.objects.all()
+        if min_price is not None or max_price is not None:
+            rows = rows.filter(price_amount__gte=min_price or 0)
+            if max_price is not None:
+                rows = rows.filter(price_amount__lte=max_price)
+        else:
+            rows = rows.filter(Q(price_amount__isnull=True) | Q(price_amount__gte=0))
+        total = rows.count()
+        if not total or (page - 1) * limit >= total:
+            return [], total
+        collation = 'C' if connection.vendor == 'postgresql' else 'BINARY'
+        tie = Collate('pk', collation)
+        if sort == 'menu_name_asc':
+            order = [Collate(UnicodeCasefold('name'), collation), tie]
+        else:
+            price = F('price_amount')
+            order = [price.asc(nulls_last=True) if sort == 'price_asc' else price.desc(nulls_last=True), tie]
+        start = (page - 1) * limit
+        return [self._menu(row) for row in rows.select_related('restaurant').order_by(*order)[start:start + limit]], total
+
+    def ordered_menu_page(self, candidates, sort, page, limit):
+        """SQL ordering/offset for equivalent keys; None means exact Python fallback."""
+        collation = 'C' if connection.vendor == 'postgresql' else 'BINARY'
+        if sort == 'menu_name_asc':
+            if not all(_simple_sort_text(menu['menu_name']) for menu in candidates):
+                return None
+            order = [Collate(Lower(Collate('name', collation)), collation), Collate('pk', collation)]
+        elif sort in {'price_asc', 'price_desc'}:
+            price = F('price_amount')
+            order = [price.asc(nulls_last=True) if sort == 'price_asc' else price.desc(nulls_last=True),
+                     Collate('pk', collation)]
+        else:
+            return None
+        ids = [menu['menu_id'] for menu in candidates]
+        start = (page - 1) * limit
+        rows = Menu.objects.select_related('restaurant').filter(pk__in=ids).order_by(*order)[start:start + limit]
+        distances = {menu['menu_id']: menu.get('distance_km') for menu in candidates}
+        return [dict(self._menu(row), distance_km=distances[row.pk]) for row in rows]
+
+    def restaurant_candidates(self, *, include_hours=False):
+        if include_hours:
+            return self.list_restaurants()
+        return [dict(restaurant_id=pk, restaurant_name=name, brand=brand, address=address,
+                     category=category, restaurant_type=kind, latitude=lat, longitude=lng)
+                for pk, name, brand, address, category, kind, lat, lng in Restaurant.objects.values_list(
+                    'pk', 'name', 'brand', 'address', 'category', 'restaurant_type', 'latitude', 'longitude')]
+
+    def restaurant_summaries(self, restaurant_ids):
+        return {row.pk: self._restaurant(row) for row in self._restaurant_rows(
+            self._restaurants().filter(pk__in=restaurant_ids))}
+
+    def restaurant_prices(self, minimum, maximum):
+        eligible = Q(price_amount__gte=minimum)
+        if maximum is not None:
+            eligible &= Q(price_amount__lte=maximum)
+        rows = Menu.objects.values('restaurant_id').annotate(
+            minimum=Min('price_amount'), eligible=Count('pk', filter=eligible))
+        return ({row['restaurant_id']: row['minimum'] for row in rows if row['minimum'] is not None},
+                {row['restaurant_id'] for row in rows if row['eligible']})
 
     def list_menus(self):
         return [self._menu(row) for row in Menu.objects.select_related('restaurant').order_by('preprocess_row_id')]
@@ -64,12 +199,16 @@ class DatabaseCatalogRepository:
                     .order_by('preprocess_row_id')]
 
     def get_menu(self, menu_id):
-        row = Menu.objects.select_related('restaurant', 'analysis_reference').filter(pk=menu_id).first()
+        row = Menu.objects.select_related('restaurant', 'analysis_reference', 'allergen_link__source').annotate(
+            _catalog_has_declarations=Exists(FoodDeclaration.objects.filter(menu_id=OuterRef('pk'))),
+            _catalog_has_components=Exists(MenuComponent.objects.filter(menu_id=OuterRef('pk'))),
+            _catalog_has_groups=Exists(OptionGroup.objects.filter(menu_id=OuterRef('pk')))).filter(pk=menu_id).first()
         if row is None:
             return None
         menu = self._menu(row)
-        declarations = [declaration_json(d) for d in row.declarations.select_related('source')]
-        link = AllergenLink.objects.select_related('source').filter(menu=row).first()
+        declarations = ([declaration_json(d) for d in row.declarations.select_related('source')]
+                        if row._catalog_has_declarations else [])
+        link = getattr(row, 'allergen_link', None)
         reference = None if link is None else {
             'external_menu_id': link.external_menu_id, 'brand': link.brand,
             'match_method': link.match_method, 'status': link.status,
@@ -86,9 +225,12 @@ class DatabaseCatalogRepository:
             source={'source_url': None, 'collected_at': menu.get('collected_at')},
             verification={'verification_status': 'declarations_available' if declarations else 'unmatched'}, safety_assessment='not_determined',
             ingredients=[d for d in declarations if d['kind'] == 'ingredient'],
-            components=[component_json(c) for c in row.components.select_related('source').prefetch_related('declarations__source')],
+            components=([component_json(c) for c in row.components.select_related('source').prefetch_related(
+                Prefetch('declarations', queryset=FoodDeclaration.objects.select_related('source')))]
+                        if row._catalog_has_components else []),
             option_groups=[{'group_id': g.pk, 'name': g.name, 'min_select': g.min_select,
-                'max_select': g.max_select, 'source': source_json(g.source)} for g in row.option_groups.select_related('source')])
+                'max_select': g.max_select, 'source': source_json(g.source)} for g in row.option_groups.select_related('source')]
+                if row._catalog_has_groups else [])
 
     def get_dietary_component(self, component_id):
         if component_id.startswith('component:'):
