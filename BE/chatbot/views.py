@@ -29,6 +29,7 @@ def chat_view(request):
     if reset or state is None:
         state = search.initial_state()
     state = dict(state)
+    state.pop('result_filter', None)
     state['criteria'] = search.initial_state()['criteria']
     if expanding:
         radius = request.payload['radius_m']
@@ -71,6 +72,8 @@ def chat_view(request):
                 change = parse_gemini(text, context=context)
                 interpretation_ms = (perf_counter() - before) * 1000
                 stage = 'search'
+                if isinstance(change, dict) and change.get('intent', 'search') == 'search':
+                    change.pop('menu_id', None)
                 if isinstance(change, dict) and change.get('menu_id'):
                     allowed = {row['menu_id'] for row in context['last_results']}
                     if change['menu_id'] not in allowed:
@@ -79,11 +82,11 @@ def chat_view(request):
             next_state, result = chat(message.strip(), state, parse=interpret, search=search)
         else:
             next_state, result = state, search(state)
-    except GeminiUnavailable:
-        logging.getLogger(__name__).warning("Gemini unavailable after interpretation retry")
+    except GeminiUnavailable as error:
+        logging.getLogger(__name__).warning("AI unavailable stage=%s reason=%s", stage, error)
         return JsonResponse({
             'error': 'gemini_unavailable',
-            'message': 'AI 응답을 일시적으로 받지 못했어요. 잠시 후 다시 시도해 주세요.',
+            'message': 'AI가 질문을 해석하지 못했어요. 기존 검색 조건은 유지됩니다. 잠시 후 같은 질문을 다시 보내 주세요.',
         }, status=503)
     except UnsupportedCriterion as error:
         return JsonResponse({'message': str(error), 'state': state,

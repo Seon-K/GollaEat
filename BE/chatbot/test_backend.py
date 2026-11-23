@@ -29,7 +29,7 @@ class BackendSearchTests(TestCase):
             self.row('ok1', 'far', 500), self.row('bad', 'near', 50),
             self.row('unknown', 'near', 100), self.row('ok2', 'near', 100),
             self.row('ok3', 'near', 100), self.row('ok4', 'outside', 1001)]}
-        result = self.search(dict(self.search.initial_state(), place='순천향대'))
+        result = self.search(dict(self.search.initial_state(), place='순천향대', result_filter='needs_check'))
         self.assertEqual([s['restaurant_id'] for s in result['matched']], ['near', 'far'])
         self.assertEqual(len(result['matched'][0]['menus']), 2)
         self.assertEqual(result['needs_check'][0]['menus'][0]['judgement']['status'], 'needs_check')
@@ -99,15 +99,16 @@ class DatabaseSearchQueryTests(TestCase):
         self.assertTrue(all(row['distance_m'] == 0 for row in result['menus']))
 
 
-    def test_broad_lunch_request_discards_literal_menu_and_matched_only(self):
+    def test_broad_lunch_request_discards_literal_menu_and_legacy_result_filters(self):
         state, result = chat(
             "순천향대 근처에서 먹을 수 있는 점심은?",
-            {"location": {"lat": 36, "lng": 127}, "criteria": ["allergen-milk"]},
-            parse=lambda _: {"menu": "점심", "result_filter": "matched"},
+            {"location": {"lat": 36, "lng": 127}, "criteria": ["allergen-milk"],
+             "result_filter": "matched"},
+            parse=lambda _: {"menu": "점심", "result_filter": "needs_check"},
             search=lambda filters: filters,
         )
         self.assertNotIn("menu", result)
-        self.assertEqual(result["result_filter"], "all")
+        self.assertNotIn("result_filter", state)
         self.assertEqual(result["criteria"], ["allergen-milk"])
 
 
