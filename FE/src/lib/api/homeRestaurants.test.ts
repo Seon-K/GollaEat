@@ -23,8 +23,8 @@ describe("home restaurant page caching", () => {
     vi.setSystemTime(Date.now() + 10 * 60_000);
     await client.fetchQuery(first);
     expect(getRestaurants).toHaveBeenCalledTimes(2);
-    expect(getRestaurants).toHaveBeenNthCalledWith(1, { region: "아산시", page: 1, limit: 10, view: "card" });
-    expect(getRestaurants).toHaveBeenNthCalledWith(2, { region: "아산시", page: 2, limit: 10, view: "card" });
+    expect(getRestaurants).toHaveBeenNthCalledWith(1, { region: "아산시", page: 1, limit: 10, view: "card" }, expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(getRestaurants).toHaveBeenNthCalledWith(2, { region: "아산시", page: 2, limit: 10, view: "card" }, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     const observer = new QueryObserver(client, first);
     const stop = observer.subscribe(() => {});
     expect(observer.getCurrentResult().isFetching).toBe(false);

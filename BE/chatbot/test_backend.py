@@ -1,7 +1,7 @@
 import uuid
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from dietary.models import Criterion, Profile
 from chatbot.backend import BackendSearch
 from chatbot.chatbot import chat
@@ -59,6 +59,7 @@ class BackendSearchTests(TestCase):
             self.search(dict(self.search.initial_state(), ingredients=['없는 재료']))
         self.catalog.search_menus.assert_not_called()
 
+    @override_settings(CATALOG_USE_DB=False)
     def test_coordinate_search_uses_catalog_services(self):
         from chatbot.catalog_search import nearby_menus, validate_location
         with patch('chatbot.catalog_search.get_repository') as factory:
@@ -81,3 +82,51 @@ class BackendSearchTests(TestCase):
         from chatbot.backend import criteria_codes
         self.assertEqual(criteria_codes({'ingredients': ['땅콩']}), ['allergen-nuts'])
         self.assertEqual(criteria_codes({'allergens': ['땅콩']}), ['allergen-nuts'])
+
+class DatabaseSearchQueryTests(TestCase):
+    def test_many_menus_use_two_candidate_queries(self):
+        from catalog.models import Restaurant, Menu
+        from chatbot.catalog_search import nearby_menus
+        store = Restaurant.objects.create(place_id='near', name='Near', latitude=36, longitude=127)
+        Restaurant.objects.create(place_id='far', name='Far', latitude=37, longitude=127)
+        Menu.objects.bulk_create([
+            Menu(preprocess_row_id=str(i), restaurant=store, name='Noodles')
+            for i in range(205)
+        ])
+        with override_settings(CATALOG_USE_DB=True), self.assertNumQueries(2):
+            result = nearby_menus({'location': {'lat': 36, 'lng': 127}, 'menu': 'noodle'})
+        self.assertEqual(len(result['menus']), 205)
+        self.assertTrue(all(row['distance_m'] == 0 for row in result['menus']))
+
+
+    def test_broad_lunch_request_discards_literal_menu_and_matched_only(self):
+        state, result = chat(
+            "순천향대 근처에서 먹을 수 있는 점심은?",
+            {"location": {"lat": 36, "lng": 127}, "criteria": ["allergen-milk"]},
+            parse=lambda _: {"menu": "점심", "result_filter": "matched"},
+            search=lambda filters: filters,
+        )
+        self.assertNotIn("menu", result)
+        self.assertEqual(result["result_filter"], "all")
+        self.assertEqual(result["criteria"], ["allergen-milk"])
+
+
+    def test_lunch_drops_stale_menu_and_restaurant_filters(self):
+        previous = {
+            "location": {"lat": 36, "lng": 127},
+            "criteria": ["allergen-milk"],
+            "menu": "\uae40\ubc25",
+            "restaurant": "\uc2e0\ucc3d\uac00\ub77d\uad6d\uc218",
+        }
+        for message in (
+            "\uc21c\ucc9c\ud5a5\ub300 \uadfc\ucc98\uc5d0\uc11c \uc810\uc2ec \ucd94\ucc9c\ud574\uc918",
+            "\uc21c\ucc9c\ud5a5\ub300 \uadfc\ucc98\uc5d0\uc11c \ubb50\uba39\uc744\uae4c? \ub0b4\uac00 \uba39\uc744 \uc218 \uc788\ub294 \uc74c\uc2dd\uc73c\ub85c.",
+        ):
+            for parsed in ({}, {"menu": previous["menu"], "restaurant": previous["restaurant"]}):
+                _, result = chat(
+                    message,
+                    previous, parse=lambda _: parsed, search=lambda filters: filters,
+                )
+                self.assertNotIn("menu", result)
+                self.assertNotIn("restaurant", result)
+                self.assertEqual(result["criteria"], previous["criteria"])

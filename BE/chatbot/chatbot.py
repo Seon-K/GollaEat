@@ -3,7 +3,7 @@ import argparse
 import json
 import os
 import re
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
@@ -29,6 +29,10 @@ def parse_demo(message):
         if terms:
             changes["ingredients"] = terms
     return changes or {"question": "예시: 순천향대 근처에서 우유 알레르기가 있는 내가 먹을 김밥 찾아줘"}
+
+
+class GeminiUnavailable(ValueError):
+    pass
 
 
 def parse_gemini(message, *, debug=False, context=None, response_data=None):
@@ -101,19 +105,40 @@ def parse_gemini(message, *, debug=False, context=None, response_data=None):
             {'question': message, 'result': response_data}, ensure_ascii=False)}]}]
         data['generationConfig']['responseSchema'] = {
             'type': 'OBJECT', 'properties': {'answer': {'type': 'STRING'}}, 'required': ['answer']}
-    model = quote(os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"), safe="")
-    request = Request(
-        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-        data=json.dumps(data).encode("utf-8"),
-        headers={"x-goog-api-key": key, "Content-Type": "application/json"},
-    )
+    primary_model = os.getenv("GEMINI_MODEL", "").strip() or "gemini-3.5-flash-lite"
+    fallback_model = "gemini-3.1-flash-lite"
+    body = json.dumps(data).encode("utf-8")
+
+    def generate(model, timeout):
+        request = Request(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{quote(model, safe='')}:generateContent",
+            data=body,
+            headers={"x-goog-api-key": key, "Content-Type": "application/json"},
+        )
+        with urlopen(request, timeout=timeout) as response:
+            return json.load(response)
+
     try:
-        with urlopen(request, timeout=20) as response:
-            payload = json.load(response)
+        try:
+            payload = generate(primary_model, timeout=10)
+        except HTTPError as error:
+            error.close()
+            if primary_model == fallback_model or not (error.code == 429 or 500 <= error.code < 600):
+                raise
+            payload = generate(fallback_model, timeout=5)
+        except (URLError, TimeoutError):
+            if primary_model == fallback_model:
+                raise
+            payload = generate(fallback_model, timeout=5)
     except HTTPError as error:
+        error.close()
+        if 500 <= error.code < 600:
+            raise GeminiUnavailable(f"Gemini HTTP {error.code}") from error
         if error.code == 429:
-            raise ValueError("Gemini 호출 한도에 도달했어요. 잠시 후 다시 시도해 주세요.") from error
+            raise GeminiUnavailable("Gemini 호출 한도에 도달했어요. 잠시 후 다시 시도해 주세요.") from error
         raise ValueError(f"Gemini 호출 실패 (HTTP {error.code})") from error
+    except (URLError, TimeoutError) as error:
+        raise GeminiUnavailable("Gemini에 연결하지 못했어요.") from error
     candidates = payload.get("candidates", [])
     if not candidates or candidates[0].get("finishReason") != "STOP":
         raise ValueError("Gemini가 질문 해석을 완료하지 못했어요.")
@@ -198,6 +223,41 @@ def chat(message, state, parse=parse_demo, search=demo_search):
             next_state[field] = value
     if "question" in change:
         return state, {"question": change["question"]}
+    if next_state["intent"] == "search":
+        # A fresh meal recommendation should not inherit an unnamed menu or store.
+        meal_request = re.search(
+            r"\uc544\uce68|\uc810\uc2ec|\uc800\ub141|\uc2dd\uc0ac", message
+        ) and re.search(
+            r"\ucd94\ucc9c|\uba39\uc744|\uba39\uc744\uae4c|\ucc3e\uc544|\ubb50\s*\uba39", message
+        )
+        open_food_request = re.search(
+            r"\ubb50\s*\uba39|\ubb34\uc5c7\uc744\s*\uba39|\ubb50\uac00\s*\uc788", message
+        )
+        if meal_request or open_food_request:
+            for field in ("menu", "restaurant"):
+                value = next_state.get(field)
+                if value and (field not in change or value.casefold() not in message.casefold()):
+                    next_state.pop(field, None)
+        # Keep broad meal requests out of the literal menu-name filter.
+        if next_state.get("menu", "").strip() in {
+            "아침", "점심", "저녁", "식사",
+            "아침 메뉴", "점심 메뉴", "저녁 메뉴",
+        }:
+            next_state.pop("menu", None)
+        result_filter = change.get("result_filter", "all")
+        if result_filter == "matched" and not re.search(
+            "(?:\uc77c\uce58|\ub9de\ub294|\ubd80\ud569|\uc801\ud569)"
+            + r"[^.!?\n]{0,18}?"
+            + "\ub9cc"
+            + r"(?:\s|[.!?]|$)"
+            + "|\ucd94\uac00"
+            + r"\s*"
+            + "\ud655\uc778"
+            + r"[^.!?\n]{0,18}"
+            + "(?:\ube7c|\uc81c\uc678)", message
+        ):
+            result_filter = "all"
+        next_state["result_filter"] = result_filter
     if next_state.get("intent") == "explain":
         return next_state, search(next_state)
     if not next_state.get("place") and not next_state.get("restaurant") and not next_state.get("location"):

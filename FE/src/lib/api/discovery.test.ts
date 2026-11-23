@@ -46,7 +46,7 @@ describe("restaurant discovery API contract", () => {
     await apiProvider.getMenus({ restaurant_id: "selected-store", region: "아산시", personalize: true, sort: "dietary", page: 2, category: "한식" });
     expect(apiGet).toHaveBeenLastCalledWith("/api/menus", expect.objectContaining({
       restaurant_id: "selected-store", region: "아산시", personalize: true, sort: "dietary", page: 2, category: "한식",
-    }));
+    }), undefined);
   });
   it("passes map extent, user origin and server filters together", async () => {
     vi.mocked(apiGet).mockResolvedValue({ results: [], pagination: { page: 1, limit: 20, count: 0, total: 0, total_pages: 0, next_page: null, previous_page: null } });
@@ -55,7 +55,7 @@ describe("restaurant discovery API contract", () => {
     expect(apiGet).toHaveBeenCalledWith("/api/restaurants", expect.objectContaining({
       bounds: "127,36,127.1,36.1", lat: 35, lng: 128, personalize: true, region: "아산시", match_only: true,
       category: "한식", max_price: 10000, sort: "dietary", radius_km: undefined,
-    }));
+    }), undefined);
   });
   it("maps server check status without inferring a restaurant verdict", () => {
     const raw = { restaurant_id: "r", restaurant_name: "가게", latitude: 36, longitude: 127,

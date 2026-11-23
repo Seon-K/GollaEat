@@ -32,12 +32,12 @@ function MenuDetailContent() {
 
   const menuQuery = useQuery({
     queryKey: apiKeys.menu(id),
-    queryFn: () => getDataProvider().getMenu(id),
+    queryFn: ({ signal }) => getDataProvider().getMenu(id, { signal }),
   });
 
   const judgementQuery = useQuery({
     queryKey: apiKeys.judgement(id),
-    queryFn: () => getDataProvider().postJudgement(id),
+    queryFn: ({ signal }) => getDataProvider().postJudgement(id, { signal }),
   });
 
   const reviewsQuery = useQuery({

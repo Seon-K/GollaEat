@@ -1,3 +1,6 @@
+import { createContext, useContext } from "react";
+import { useLocation } from "react-router-dom";
+import { ProfileCacheSync } from "./AppProviders";
 import { apiKeys } from "@/lib/api/keys";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
@@ -7,11 +10,15 @@ import { getDataMode, getDataProvider } from "@/lib/api/providers";
 import { useProfileStore } from "@/store/profileStore";
 import { ApiError } from "@/lib/api/errors";
 
+const SessionState = createContext({ ready: false, error: null as string | null, retry: () => {} });
+export const useSessionState = () => useContext(SessionState);
+
 /**
  * 앱 기동 시 세션 1회 초기화 + 서버 프로필 hydrate (api 모드).
  * mock 모드는 네트워크 없이 통과.
  */
 export function SessionGate({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
   const queryClient = useQueryClient();
   const bootVersion = useRef(0);
   const [ready, setReady] = useState(false);
@@ -29,7 +36,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
       }
       const profile = await queryClient.fetchQuery({
         queryKey: apiKeys.profile(),
-        queryFn: async () => (await getBootstrapProfile()) ?? getDataProvider().getProfile(),
+        queryFn: async ({ signal }) => (await getBootstrapProfile()) ?? getDataProvider().getProfile({ signal }),
         staleTime: 0, retry: false,
       });
       if (version !== bootVersion.current) return;
@@ -61,6 +68,9 @@ export function SessionGate({ children }: { children: ReactNode }) {
     });
   }), [queryClient]);
 
+  const state = { ready, error, retry: () => setAttempt((n) => n + 1) };
+  if (pathname === "/") return <SessionState.Provider value={state}>{ready && <ProfileCacheSync />}{children}</SessionState.Provider>;
+
   if (error) {
     return (
       <main className="flex min-h-[100dvh] flex-col items-center justify-center bg-background px-6 text-center">
@@ -85,5 +95,5 @@ export function SessionGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return children;
+  return <SessionState.Provider value={state}><ProfileCacheSync />{children}</SessionState.Provider>;
 }

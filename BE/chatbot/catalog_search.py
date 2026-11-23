@@ -29,6 +29,10 @@ def nearby_menus(state):
     if not state.get('location'):
         return {'question': '주변 검색을 위해 위치를 선택해 주세요.'}
     repository = get_repository()
+    location = validate_location(state['location'])
+    if callable(getattr(type(repository), 'nearby_menu_rows', None)):
+        return {'menus': repository.nearby_menu_rows(location, state.get('radius_m', 1000) / 1000,
+            state.get('restaurant', ''), state.get('menu', ''))}
     params = {key: str(value) for key, value in validate_location(state['location']).items()}
     params.update(radius_km=str(state.get('radius_m', 1000) / 1000), sort='distance_asc', limit='100')
     if state.get('restaurant'):

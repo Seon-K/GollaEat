@@ -15,6 +15,7 @@ import type {
   ApiReview,
   ApiSession,
 } from "@/lib/api/types";
+import type { ApiRequestOptions } from "@/lib/api/client";
 
 export type DataMode = "api" | "mock";
 
@@ -59,16 +60,18 @@ export interface DataProvider {
   getSession(): Promise<ApiSession>;
   createReport(input: ReportInput): Promise<ApiReport>;
   getDietaryCriteria(): Promise<ApiDietaryCriterion[]>;
-  getProfile(): Promise<ApiProfile>;
+  getProfile(options?: ApiRequestOptions): Promise<ApiProfile>;
   putProfile(criteria: string[]): Promise<ApiProfile>;
   getMenus(
     params?: MenuListParams,
+    options?: ApiRequestOptions,
   ): Promise<{ items: MenuListItemUi[]; pagination: PaginationUi }>;
-  getMenu(menuId: string): Promise<MenuDetailUi>;
+  getMenu(menuId: string, options?: ApiRequestOptions): Promise<MenuDetailUi>;
   getRestaurants(
     params?: RestaurantListParams,
+    options?: ApiRequestOptions,
   ): Promise<{ items: RestaurantUi[]; pagination: PaginationUi }>;
-  postJudgement(menuId: string): Promise<JudgementUi>;
+  postJudgement(menuId: string, options?: ApiRequestOptions): Promise<JudgementUi>;
   postRecommendationsRank(menuIds: string[]): Promise<JudgementUi[]>;
   postCommunication(
     components: Array<{ id: string; role: string }>,
@@ -89,5 +92,6 @@ export interface DataProvider {
     message: string;
     location?: { lat: number; lng: number };
     radius_m?: number;
+    new_conversation?: boolean;
   }): Promise<ChatResultUi>;
 }

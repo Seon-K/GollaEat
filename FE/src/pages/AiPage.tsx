@@ -16,6 +16,7 @@ import { Toast } from "@/components/Toast";
 import { allergenLabel } from "@/data/allergens";
 import { restrictionLabel } from "@/data/restrictions";
 import { SCH_ORIGIN } from "@/data/mock";
+import { useGeolocation } from "@/hooks/useGeolocation";
 import type {
   ChatMenuHitUi,
   ChatPlaceCandidateUi,
@@ -104,6 +105,7 @@ export default function AiPage() {
   const navigate = useNavigate();
   const allergens = useProfileStore((s) => s.allergens);
   const restrictions = useProfileStore((s) => s.restrictions);
+  const geo = useGeolocation({ autoRequest: true });
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sending, setSending] = useState(false);
@@ -114,6 +116,10 @@ export default function AiPage() {
     lng: number;
   } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const defaultLocation = geo.position !== null
+    ? { lat: geo.position!.lat, lng: geo.position!.lng }
+    : { lat: SCH_ORIGIN.lat, lng: SCH_ORIGIN.lng };
 
   const conditionChips = useMemo(
     () => profileConditionChips(allergens, restrictions),
@@ -147,26 +153,22 @@ export default function AiPage() {
   const send = async (
     text: string,
     locationOverride?: { lat: number; lng: number } | null,
-    radiusM?: number,
   ) => {
     const trimmed = text.trim();
-    if ((!trimmed && !locationOverride && radiusM === undefined) || sending) return;
+    if (!trimmed || sending) return;
     setSending(true);
     setInput("");
-    if (radiusM === undefined) setMessages((prev) => [
+    setMessages((prev) => [
       ...prev,
-      { id: `u-${Date.now()}`, role: "user", text: trimmed || "이 위치에서 검색해 주세요." },
+      { id: `u-${Date.now()}`, role: "user", text: trimmed },
     ]);
     const location =
-      locationOverride ??
-      searchLocation ?? {
-        lat: SCH_ORIGIN.lat,
-        lng: SCH_ORIGIN.lng,
-      };
+      locationOverride ?? searchLocation ?? defaultLocation;
     try {
-      const result = await getDataProvider().postChat(
-        radiusM === undefined ? { message: trimmed, location } : { message: "", radius_m: radiusM },
-      );
+      const result = await getDataProvider().postChat({
+        message: trimmed,
+        location,
+      });
       if (result.state?.location && typeof result.state.location === "object") {
         const loc = result.state.location as { lat?: unknown; lng?: unknown };
         if (typeof loc.lat === "number" && typeof loc.lng === "number") {
@@ -188,7 +190,6 @@ export default function AiPage() {
             ? e.message
             : "응답을 받지 못했습니다.";
       setToast(msg);
-      if (radiusM !== undefined) return;
       setMessages((prev) => [
         ...prev,
         {
@@ -213,7 +214,21 @@ export default function AiPage() {
   };
 
   const selectPlace = (candidate: ChatPlaceCandidateUi) => {
-    void send("", candidate.location);
+    // 후보 좌표를 location 으로 고정. 메시지에 직전 menu 힌트가 있으면 함께 보낸다.
+    let menuHint: string | undefined;
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const m = messages[i];
+      if (m.role !== "assistant") continue;
+      const menu = m.result.state?.menu;
+      if (typeof menu === "string" && menu.trim()) {
+        menuHint = menu.trim();
+        break;
+      }
+    }
+    const followUp = menuHint
+      ? `${candidate.name} 근처 ${menuHint}`
+      : `${candidate.name} 근처`;
+    void send(followUp, candidate.location);
   };
 
   return (
@@ -377,21 +392,6 @@ export default function AiPage() {
                       />
                     ))}
                   </section>
-                ) : null}
-                {isLatest && m.result.radiusM !== null ? (
-                  <p className="text-center text-sm text-muted">
-                    검색 반경 {m.result.radiusM / 1000}km
-                  </p>
-                ) : null}
-                {isLatest && m.result.nextRadiusM !== undefined ? (
-                  <button
-                    type="button"
-                    disabled={sending}
-                    onClick={() => void send("", null, m.result.nextRadiusM)}
-                    className="w-full rounded-xl border border-[#e5e8e6] bg-card px-4 py-3 text-sm font-bold disabled:opacity-50"
-                  >
-                    범위 넓히기 · {m.result.nextRadiusM / 1000}km로 검색
-                  </button>
                 ) : null}
               </div>
             );

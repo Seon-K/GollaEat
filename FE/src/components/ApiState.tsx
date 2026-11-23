@@ -1,5 +1,5 @@
 import { LoadingSkeleton, type SkeletonVariant } from "./LoadingSkeleton";
-import { ApiError } from "@/lib/api/errors";
+import { ApiError, isRequestCancelled } from "@/lib/api/errors";
 
 export function ApiLoading({ label, variant = "list" }: { label?: string; variant?: SkeletonVariant }) {
   return <LoadingSkeleton variant={variant} label={label} />;
@@ -12,6 +12,7 @@ export function ApiErrorPanel({
   error: unknown;
   onRetry?: () => void;
 }) {
+  if (isRequestCancelled(error)) return null;
   const message =
     error instanceof ApiError
       ? error.message

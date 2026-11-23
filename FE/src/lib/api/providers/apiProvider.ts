@@ -39,12 +39,12 @@ export const apiProvider: DataProvider = {
     return res.criteria ?? [];
   },
 
-  getProfile: () => apiGet<ApiProfile>("/api/profile"),
+  getProfile: (options) => apiGet<ApiProfile>("/api/profile", undefined, options),
 
   putProfile: (criteria) =>
     apiPut<ApiProfile>("/api/profile", { criteria }),
 
-  async getMenus(params = {}) {
+  async getMenus(params = {}, options) {
     const res = await apiGet<ApiMenusResponse>("/api/menus", {
       region: params.region,
       judgement_status: params.judgement_status,
@@ -60,19 +60,19 @@ export const apiProvider: DataProvider = {
       min_price: params.min_price,
       max_price: params.max_price,
       personalize: params.personalize ?? true,
-    });
+    }, options);
     return {
       items: (res.results ?? []).map(adaptMenuListItem),
       pagination: adaptPagination(res.pagination),
     };
   },
 
-  async getMenu(menuId) {
-    const res = await apiGet<ApiMenuDetail>(`/api/menus/${menuId}`);
+  async getMenu(menuId, options) {
+    const res = await apiGet<ApiMenuDetail>(`/api/menus/${menuId}`, undefined, options);
     return adaptMenuDetail(res);
   },
 
-  async getRestaurants(params = {}) {
+  async getRestaurants(params = {}, options) {
     const res = await apiGet<ApiRestaurantsResponse>("/api/restaurants", {
       view: params.view,
       region: params.region,
@@ -90,17 +90,17 @@ export const apiProvider: DataProvider = {
       lng: params.lng,
       radius_km: params.radius_km,
       sort: params.sort,
-    });
+    }, options);
     return {
       items: (res.results ?? []).map(adaptRestaurant),
       pagination: adaptPagination(res.pagination),
     };
   },
 
-  async postJudgement(menuId) {
+  async postJudgement(menuId, options) {
     const res = await apiPost<ApiJudgement>("/api/judgements", {
       menu_id: menuId,
-    });
+    }, options);
     return adaptJudgement(res);
   },
 
@@ -170,7 +170,8 @@ export const apiProvider: DataProvider = {
       message: input.message,
       location: input.location,
       radius_m: input.radius_m,
-    });
+      new_conversation: input.new_conversation,
+    }, { timeoutMs: 60_000 });
     return adaptChatResponse(res);
   },
 };

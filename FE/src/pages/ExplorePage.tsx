@@ -1,3 +1,4 @@
+import { useGeolocation } from "@/hooks/useGeolocation";
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
@@ -19,12 +20,16 @@ import { formatConditionBanner } from "@/lib/conditionBanner";
 import { useProfileStore } from "@/store/profileStore";
 
 export default function ExplorePage() {
+  const geo = useGeolocation({ autoRequest: true });
+  const [useGps, setUseGps] = useState(true);
+  const hasGps = useGps && geo.position !== null;
+  const origin = hasGps ? geo.position! : ASAN_ORIGIN;
   const [locationOpen, setLocationOpen] = useState(false);
   const [selected, setSelected] = useState<RestaurantUi | null>(null);
   const allergens = useProfileStore((s) => s.allergens), restrictions = useProfileStore((s) => s.restrictions);
   const filters = useDiscoveryFilters((s) => s.home), update = useDiscoveryFilters((s) => s.update);
   const query = useDebounced(filters.query);
-  const params = { ...filterParams(filters, query), region: "아산시", personalize: true, lat: ASAN_ORIGIN.lat, lng: ASAN_ORIGIN.lng };
+  const params = { ...filterParams(filters, query), region: "아산시", personalize: true, lat: origin.lat, lng: origin.lng };
   const profile = profileSignature(allergens, restrictions);
   const scope = JSON.stringify({ ...params, profile });
   const storedPage = useDiscoveryFilters((s) => s.homePage);
@@ -44,7 +49,7 @@ export default function ExplorePage() {
   return <main className="min-h-[100dvh] bg-background pb-24">
     <div className="px-5 pt-5">
       <button type="button" onClick={() => setLocationOpen(true)} className="inline-flex items-center gap-1 text-[14px] font-semibold text-primary touch-target">
-        <MapPin className="size-4" strokeWidth={2.4} />충남 아산시<ChevronDown className="size-4" />
+        <MapPin className="size-4" strokeWidth={2.4} />{hasGps ? "현재 위치" : "충남 아산시"}<ChevronDown className="size-4" />
       </button>
       <h1 className="mt-3 text-[24px] font-bold leading-snug text-text">오늘은 어떤 메뉴가<br />먹고 싶나요?</h1>
       <div className="mt-4"><DiscoverySearch value={filters.query} onChange={(query) => update("home", { query })} /></div>
@@ -52,7 +57,7 @@ export default function ExplorePage() {
       <section className="mt-6"><h2 className="mb-3 text-[16px] font-bold text-text">내 조건에 맞는 식당</h2>
         <div className="relative z-20 mb-4"><DiscoveryControls value={filters} onChange={(patch) => update("home", patch)} showSearch={false} /></div>
         {restaurantsQuery.isError && <ApiErrorPanel error={restaurantsQuery.error} onRetry={() => void restaurantsQuery.refetch()} />}
-        {loading ? <DiscoverySkeleton variant="restaurant" /> : <div className="space-y-3">{items.map((restaurant) => <RestaurantCard status={filters.status} key={restaurant.id} restaurant={restaurant} selected={selected?.id === restaurant.id} showDistance={false} onSelect={() => setSelected(restaurant)} />)}</div>}
+        {loading ? <DiscoverySkeleton variant="restaurant" /> : <div className="space-y-3">{items.map((restaurant) => <RestaurantCard status={filters.status} key={restaurant.id} restaurant={restaurant} selected={selected?.id === restaurant.id} showDistance={hasGps} onSelect={() => setSelected(restaurant)} />)}</div>}
         {!loading && !restaurantsQuery.isError && !items.length && <p className="py-10 text-center text-sm text-muted">조건에 맞는 식당이 없습니다.</p>}
         {pagination && <Pagination page={page} totalPages={pagination.totalPages} disabled={loading} onChange={changePage} />}
         {!loading && pagination && pagination.total > 0 && <p className="mt-3 text-center text-xs text-muted">총 {pagination.total.toLocaleString()}곳 · {page} / {pagination.totalPages}페이지</p>}
@@ -62,11 +67,11 @@ export default function ExplorePage() {
     <BottomNav />
     <BottomSheet open={!!selected} onClose={() => setSelected(null)} title={selected?.name}>
       <div className="pb-3">
-        {selected && <RestaurantMenuList key={selected.id} restaurant={selected} filters={filters} origin={ASAN_ORIGIN} />}
+        {selected && <RestaurantMenuList key={selected.id} restaurant={selected} filters={filters} origin={origin} />}
       </div>
     </BottomSheet>
     <BottomSheet open={locationOpen} onClose={() => setLocationOpen(false)} title="지역 선택">
-      <div className="space-y-1 pb-2"><button type="button" onClick={() => setLocationOpen(false)} className="flex w-full items-center gap-2 rounded-xl bg-primary-light px-3 py-3 text-left text-[15px] font-semibold text-primary touch-target"><MapPin className="size-4 shrink-0" />충남 아산시</button></div>
+      <div className="space-y-1 pb-2"><button type="button" onClick={() => { setUseGps(true); geo.request(); setLocationOpen(false); }} className="w-full rounded-xl px-3 py-3 text-left text-primary">현재 위치 사용</button><button type="button" onClick={() => { setUseGps(false); setLocationOpen(false); }} className="flex w-full items-center gap-2 rounded-xl bg-primary-light px-3 py-3 text-left text-[15px] font-semibold text-primary touch-target"><MapPin className="size-4 shrink-0" />충남 아산시</button></div>
     </BottomSheet>
   </main>;
 }

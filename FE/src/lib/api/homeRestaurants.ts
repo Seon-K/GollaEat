@@ -8,7 +8,7 @@ export function homeRestaurantsOptions(params: RestaurantListParams & { page: nu
   const request = { ...params, view: "card" as const, limit: HOME_RESTAURANT_PAGE_SIZE };
   return queryOptions({
     queryKey: apiKeys.restaurants({ ...request, profile, view: "home-page" }),
-    queryFn: () => getDataProvider().getRestaurants(request),
+    queryFn: ({ signal }) => getDataProvider().getRestaurants(request, { signal }),
     staleTime: Infinity, gcTime: Infinity, refetchOnMount: true,
     refetchOnWindowFocus: false, refetchOnReconnect: false,
   });

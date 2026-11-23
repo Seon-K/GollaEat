@@ -17,7 +17,7 @@ export function locate(geolocation?: Pick<Geolocation, "getCurrentPosition">): P
   });
 }
 
-export function useGeolocation() {
+export function useGeolocation({ autoRequest = false } = {}) {
   const [status, setStatus] = useState<GeoStatus>("idle");
   const [position, setPosition] = useState<GeoPoint | null>(null);
   const generation = useRef(0);
@@ -34,5 +34,6 @@ export function useGeolocation() {
       setStatus(error instanceof LocationError ? error.status : "error");
     });
   }, []);
+  useEffect(() => { if (autoRequest) request(); }, [autoRequest, request]);
   return { status, position, request };
 }

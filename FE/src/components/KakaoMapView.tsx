@@ -7,6 +7,7 @@ export interface MapMarker { id: string; name: string; lat: number; lng: number 
 export interface MapViewport { center: GeoPoint; level: number; bounds: string }
 interface KakaoMapViewProps {
   markers: MapMarker[];
+  showUserLocation?: boolean;
   fallbackCenter?: GeoPoint;
   className?: string;
   heightClassName?: string;
@@ -22,7 +23,8 @@ interface KakaoMapViewProps {
 const DEFAULT_CENTER = { lat: 36.7898, lng: 127.0017 };
 export function KakaoMapView({ markers, fallbackCenter = DEFAULT_CENTER, className = "", heightClassName = "h-40",
   ariaLabel = "지도", interactive = false, initialLevel = 5, onViewportChange, onMarkerSelect,
-  selectedId, currentPosition, moveTo }: KakaoMapViewProps) {
+  selectedId, currentPosition: suppliedPosition, showUserLocation = false, moveTo }: KakaoMapViewProps) {
+  const currentPosition = suppliedPosition ?? (showUserLocation ? fallbackCenter : null);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<KakaoMap | null>(null);
   const callbacks = useRef({ onViewportChange, onMarkerSelect });
