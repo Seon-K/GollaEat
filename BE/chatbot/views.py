@@ -43,6 +43,9 @@ def chat_view(request):
             return JsonResponse({'message': question, 'state': state, 'result': {'question': question}})
         state.update(radius_m=radius, intent='search')
         state.pop('menu_id', None)
+    else:
+        # Expanded radius belongs to the current search only.
+        state['radius_m'] = RADIUS_STEP_M
     if 'location' in request.payload:
         state['location'] = validate_location(request.payload['location'])
         state.pop('place', None)
@@ -92,7 +95,7 @@ def chat_view(request):
         radius = result['radius_m']
         result['next_radius_m'] = radius + RADIUS_STEP_M if radius < MAX_RADIUS_M else None
     answer = format_response(result)
-    if not expanding and 'question' not in result:
+    if not expanding and 'explanation' in result and 'question' not in result:
         try:
             generated = parse_gemini(message or '선택한 장소의 검색 결과를 안내해 주세요.', response_data=response_summary(result))
             if isinstance(generated.get('answer'), str) and generated['answer'].strip():

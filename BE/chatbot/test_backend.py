@@ -81,3 +81,19 @@ class BackendSearchTests(TestCase):
         from chatbot.backend import criteria_codes
         self.assertEqual(criteria_codes({'ingredients': ['땅콩']}), ['allergen-nuts'])
         self.assertEqual(criteria_codes({'allergens': ['땅콩']}), ['allergen-nuts'])
+
+class DatabaseSearchQueryTests(TestCase):
+    def test_many_menus_use_two_candidate_queries(self):
+        from django.test import override_settings
+        from catalog.models import Restaurant, Menu
+        from chatbot.catalog_search import nearby_menus
+        store = Restaurant.objects.create(place_id='near', name='Near', latitude=36, longitude=127)
+        Restaurant.objects.create(place_id='far', name='Far', latitude=37, longitude=127)
+        Menu.objects.bulk_create([
+            Menu(preprocess_row_id=str(i), restaurant=store, name='Noodles')
+            for i in range(205)
+        ])
+        with override_settings(CATALOG_USE_DB=True), self.assertNumQueries(2):
+            result = nearby_menus({'location': {'lat': 36, 'lng': 127}, 'menu': 'noodle'})
+        self.assertEqual(len(result['menus']), 205)
+        self.assertTrue(all(row['distance_m'] == 0 for row in result['menus']))

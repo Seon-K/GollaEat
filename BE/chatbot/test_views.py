@@ -41,8 +41,7 @@ class ChatApiTests(TestCase):
         response = self.send(Client(), {'location': {'lat': 36.77, 'lng': 126.93}})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(search.call_args.args[0]['location']['lat'], 36.77)
-        self.assertIn('response_data', parse.call_args.kwargs)
-        self.assertEqual(parse.call_count, 1)
+        parse.assert_not_called()
 
     @patch('chatbot.views.parse_gemini')
     def test_recent_history_is_passed_to_model(self, parse):
@@ -72,9 +71,7 @@ class ChatApiTests(TestCase):
         response = self.send(Client(), {'location': {'lat': 36, 'lng': 127}}).json()
         self.assertEqual(response['result'], result)
         self.assertNotIn('unique-store', response['message'])
-        summary = parse.call_args.kwargs['response_data']
-        self.assertEqual(summary['counts']['needs_check']['menus'], 1)
-        self.assertNotIn('needs_check', summary)
+        parse.assert_not_called()
 
     @patch('chatbot.views.BackendSearch.__call__')
     @patch('chatbot.views.parse_gemini')
@@ -95,3 +92,49 @@ class ChatApiTests(TestCase):
         self.assertIsNone(response.json()['result']['next_radius_m'])
         self.assertEqual(self.send(client, {'radius_m': 6000}).status_code, 400)
         parse.assert_not_called()
+
+    @patch('chatbot.views.BackendSearch.__call__')
+    @patch('chatbot.views.parse_gemini')
+    def test_new_question_resets_radius_in_existing_session(self, parse, search):
+        parse.side_effect = lambda *args, **kwargs: (
+            {'answer': 'Summary'} if 'response_data' in kwargs else {'menu': 'udon', 'allergens': ['\uC6B0\uC720']}
+        )
+        search.side_effect = lambda state: {
+            'matched': [], 'needs_check': [], 'radius_m': state['radius_m'],
+        }
+        client = Client()
+        location = {'lat': 36.77, 'lng': 126.93}
+        self.send(client, {'location': location})
+        self.assertEqual(self.send(client, {'radius_m': 2000}).status_code, 200)
+        response = self.send(client, {'message': 'Switch to udon'}).json()
+        self.assertEqual(response['result']['radius_m'], 1000)
+        self.assertEqual(response['result']['next_radius_m'], 2000)
+        self.assertEqual(response['state']['location'], location)
+        self.assertEqual(response['state']['menu'], 'udon')
+
+
+    @patch('chatbot.views.BackendSearch.__call__')
+    @patch('chatbot.views.parse_gemini')
+    def test_search_only_calls_model_for_interpretation(self, parse, search):
+        parse.return_value = {'intent': 'search', 'allergens': ['milk']}
+        search.return_value = {'matched': [], 'needs_check': []}
+        response = self.send(Client(), {'message': 'Find lunch',
+            'location': {'lat': 36, 'lng': 127}})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(parse.call_count, 1)
+        self.assertIn('context', parse.call_args.kwargs)
+
+    @patch('chatbot.views.BackendSearch.__call__')
+    @patch('chatbot.views.parse_gemini')
+    def test_explanation_still_generates_answer_and_falls_back(self, parse, search):
+        search.return_value = {'explanation': 'Evidence from backend'}
+        parse.side_effect = [
+            {'intent': 'explain'}, {'answer': 'Generated explanation'},
+            {'intent': 'explain'}, ValueError('model unavailable'),
+        ]
+        client = Client()
+        response = self.send(client, {'message': 'Explain ingredients'}).json()
+        self.assertEqual(response['message'], 'Generated explanation')
+        response = self.send(client, {'message': 'Explain again'}).json()
+        self.assertEqual(response['message'], 'Evidence from backend')
+        self.assertIn('response_data', parse.call_args.kwargs)
