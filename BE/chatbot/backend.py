@@ -77,8 +77,6 @@ class BackendSearch:
             if judgement['status'] == 'mismatch':
                 continue
             key = 'matched' if judgement['status'] == 'match' else 'needs_check'
-            if state.get('result_filter', 'all') not in ('all', key):
-                continue
             store = groups[key].setdefault(row['restaurant_id'], {
                 'restaurant_id': row['restaurant_id'], 'restaurant': row['restaurant_name'],
                 'distance_m': distance, 'menus': []})

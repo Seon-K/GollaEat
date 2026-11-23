@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -24,7 +24,7 @@ import type {
 } from "@/lib/api/adapters";
 import { ApiError } from "@/lib/api/errors";
 import { getDataProvider } from "@/lib/api/providers";
-import { SUGGESTED_QUESTIONS } from "@/lib/aiEngine";
+import { CURRENT_LOCATION_QUESTION, SUGGESTED_QUESTIONS } from "@/lib/aiEngine";
 import { navigateBack } from "@/lib/navBack";
 import { useProfileStore } from "@/store/profileStore";
 
@@ -115,7 +115,6 @@ export default function AiPage() {
     lat: number;
     lng: number;
   } | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
 
   const defaultLocation = geo.position !== null
     ? { lat: geo.position!.lat, lng: geo.position!.lng }
@@ -127,22 +126,17 @@ export default function AiPage() {
   );
 
   const started = messages.length > 0;
-
-  /** 장소 후보는 마지막 assistant 메시지에만 선택 가능 */
-  const activePlaceCandidates: ChatPlaceCandidateUi[] = useMemo(() => {
+  const latestResult = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i -= 1) {
-      const m = messages[i];
-      if (m.role === "assistant" && m.result.placeCandidates.length > 0) {
-        return m.result.placeCandidates;
+      const message = messages[i];
+      if (message.role === "assistant" && !message.error) {
+        return message.result;
       }
-      if (m.role === "assistant") break;
     }
-    return [];
+    return undefined;
   }, [messages]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sending]);
+  const nextRadiusM = latestResult?.nextRadiusM;
+  const activePlaceCandidates = latestResult?.placeCandidates ?? [];
 
   useEffect(() => {
     if (!toast) return;
@@ -152,7 +146,7 @@ export default function AiPage() {
 
   const send = async (
     text: string,
-    locationOverride?: { lat: number; lng: number } | null,
+    options?: { location: { lat: number; lng: number } } | { radiusM: number },
   ) => {
     const trimmed = text.trim();
     if (!trimmed || sending) return;
@@ -162,13 +156,15 @@ export default function AiPage() {
       ...prev,
       { id: `u-${Date.now()}`, role: "user", text: trimmed },
     ]);
+    const locationOverride = options && "location" in options ? options.location : undefined;
     const location =
       locationOverride ?? searchLocation ?? defaultLocation;
     try {
-      const result = await getDataProvider().postChat({
-        message: trimmed,
-        location,
-      });
+      const result = await getDataProvider().postChat(
+        options && "radiusM" in options
+          ? { message: "", radius_m: options.radiusM }
+          : { message: locationOverride ? "" : trimmed, location },
+      );
       if (result.state?.location && typeof result.state.location === "object") {
         const loc = result.state.location as { lat?: unknown; lng?: unknown };
         if (typeof loc.lat === "number" && typeof loc.lng === "number") {
@@ -214,21 +210,22 @@ export default function AiPage() {
   };
 
   const selectPlace = (candidate: ChatPlaceCandidateUi) => {
-    // 후보 좌표를 location 으로 고정. 메시지에 직전 menu 힌트가 있으면 함께 보낸다.
-    let menuHint: string | undefined;
-    for (let i = messages.length - 1; i >= 0; i -= 1) {
-      const m = messages[i];
-      if (m.role !== "assistant") continue;
-      const menu = m.result.state?.menu;
-      if (typeof menu === "string" && menu.trim()) {
-        menuHint = menu.trim();
-        break;
-      }
+    void send(`${candidate.name} 근처`, { location: candidate.location });
+  };
+
+  const sendSuggestedQuestion = (question: string) => {
+    if (question !== CURRENT_LOCATION_QUESTION) {
+      void send(question);
+      return;
     }
-    const followUp = menuHint
-      ? `${candidate.name} 근처 ${menuHint}`
-      : `${candidate.name} 근처`;
-    void send(followUp, candidate.location);
+    if (!geo.position) {
+      setToast(geo.status === "loading"
+        ? "현재 위치를 확인 중이에요. 잠시 후 다시 눌러 주세요."
+        : "현재 위치를 사용할 수 없어요. 위치 권한을 확인하거나 장소 이름으로 검색해 주세요.");
+      return;
+    }
+    const { lat, lng } = geo.position;
+    void send(question, { location: { lat, lng } });
   };
 
   return (
@@ -300,7 +297,7 @@ export default function AiPage() {
                     key={s}
                     type="button"
                     disabled={sending}
-                    onClick={() => void send(s)}
+                    onClick={() => sendSuggestedQuestion(s)}
                     className="flex w-full touch-target items-center justify-between rounded-2xl border border-[#eef1ef] bg-card px-4 py-3.5 text-left text-[14px] text-text disabled:opacity-50"
                   >
                     <span className="pr-2">{s}</span>
@@ -396,11 +393,23 @@ export default function AiPage() {
               </div>
             );
           })}
+          {nextRadiusM !== undefined ? (
+            <button
+              type="button"
+              disabled={sending}
+              onClick={() => void send(
+                `범위 넓히기 · ${nextRadiusM / 1000}km로 검색`,
+                { radiusM: nextRadiusM },
+              )}
+              className="w-full touch-target rounded-2xl border border-[#eef1ef] bg-card px-4 py-3.5 text-[14px] font-semibold text-primary disabled:opacity-50"
+            >
+              범위 넓히기 · {nextRadiusM / 1000}km로 검색
+            </button>
+          ) : null}
           {sending ? (
             <p className="text-center text-[13px] text-muted">답변 준비 중…</p>
           ) : null}
         </div>
-        <div ref={bottomRef} />
       </div>
 
       <div className="border-t border-[#eef1ef] bg-background px-4 pt-3 safe-bottom">

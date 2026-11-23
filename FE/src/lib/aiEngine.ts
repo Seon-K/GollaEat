@@ -90,11 +90,12 @@ export const AI_LOCATIONS: Record<AiLocationKey, GeoPoint> = {
   onyang: ONYANG_ORIGIN,
 };
 
+export const CURRENT_LOCATION_QUESTION = "내 위치 근처에서 내 식이조건에 맞는 메뉴 찾아줘";
+
 export const SUGGESTED_QUESTIONS = [
   "순천향대 근처에서 먹을 수 있는 점심은?",
-  "지금 내 조건에 맞는 메뉴 찾아줘",
-  "김밥 메뉴만 보여줘",
-  "추가 확인 필요한 메뉴도 보여줘",
+  CURRENT_LOCATION_QUESTION,
+  "아산역 근처에서 버거 찾아줘",
 ] as const;
 
 export function createInitialContext(profile: DietProfile): AiSessionContext {
