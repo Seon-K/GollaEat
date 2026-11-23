@@ -145,6 +145,7 @@ export const apiProvider: DataProvider = {
       message: input.message,
       location: input.location,
       radius_m: input.radius_m,
+      new_conversation: input.new_conversation,
     });
     return adaptChatResponse(res);
   },

@@ -71,5 +71,6 @@ export interface DataProvider {
     message: string;
     location?: { lat: number; lng: number };
     radius_m?: number;
+    new_conversation?: boolean;
   }): Promise<ChatResultUi>;
 }

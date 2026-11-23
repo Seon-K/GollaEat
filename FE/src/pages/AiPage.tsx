@@ -113,6 +113,7 @@ export default function AiPage() {
     lat: number;
     lng: number;
   } | null>(null);
+  const conversationStarted = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const conditionChips = useMemo(
@@ -165,8 +166,11 @@ export default function AiPage() {
       };
     try {
       const result = await getDataProvider().postChat(
-        radiusM === undefined ? { message: trimmed, location } : { message: "", radius_m: radiusM },
+        radiusM === undefined
+          ? { message: trimmed, location, new_conversation: !conversationStarted.current }
+          : { message: "", radius_m: radiusM },
       );
+      conversationStarted.current = true;
       if (result.state?.location && typeof result.state.location === "object") {
         const loc = result.state.location as { lat?: unknown; lng?: unknown };
         if (typeof loc.lat === "number" && typeof loc.lng === "number") {

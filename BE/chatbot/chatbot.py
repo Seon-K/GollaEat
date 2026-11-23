@@ -198,6 +198,41 @@ def chat(message, state, parse=parse_demo, search=demo_search):
             next_state[field] = value
     if "question" in change:
         return state, {"question": change["question"]}
+    if next_state["intent"] == "search":
+        # A fresh meal recommendation should not inherit an unnamed menu or store.
+        meal_request = re.search(
+            r"\uc544\uce68|\uc810\uc2ec|\uc800\ub141|\uc2dd\uc0ac", message
+        ) and re.search(
+            r"\ucd94\ucc9c|\uba39\uc744|\uba39\uc744\uae4c|\ucc3e\uc544|\ubb50\s*\uba39", message
+        )
+        open_food_request = re.search(
+            r"\ubb50\s*\uba39|\ubb34\uc5c7\uc744\s*\uba39|\ubb50\uac00\s*\uc788", message
+        )
+        if meal_request or open_food_request:
+            for field in ("menu", "restaurant"):
+                value = next_state.get(field)
+                if value and (field not in change or value.casefold() not in message.casefold()):
+                    next_state.pop(field, None)
+        # Keep broad meal requests out of the literal menu-name filter.
+        if next_state.get("menu", "").strip() in {
+            "아침", "점심", "저녁", "식사",
+            "아침 메뉴", "점심 메뉴", "저녁 메뉴",
+        }:
+            next_state.pop("menu", None)
+        result_filter = change.get("result_filter", "all")
+        if result_filter == "matched" and not re.search(
+            "(?:\uc77c\uce58|\ub9de\ub294|\ubd80\ud569|\uc801\ud569)"
+            + r"[^.!?\n]{0,18}?"
+            + "\ub9cc"
+            + r"(?:\s|[.!?]|$)"
+            + "|\ucd94\uac00"
+            + r"\s*"
+            + "\ud655\uc778"
+            + r"[^.!?\n]{0,18}"
+            + "(?:\ube7c|\uc81c\uc678)", message
+        ):
+            result_filter = "all"
+        next_state["result_filter"] = result_filter
     if next_state.get("intent") == "explain":
         return next_state, search(next_state)
     if not next_state.get("place") and not next_state.get("restaurant") and not next_state.get("location"):

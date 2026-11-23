@@ -97,3 +97,36 @@ class DatabaseSearchQueryTests(TestCase):
             result = nearby_menus({'location': {'lat': 36, 'lng': 127}, 'menu': 'noodle'})
         self.assertEqual(len(result['menus']), 205)
         self.assertTrue(all(row['distance_m'] == 0 for row in result['menus']))
+
+
+    def test_broad_lunch_request_discards_literal_menu_and_matched_only(self):
+        state, result = chat(
+            "순천향대 근처에서 먹을 수 있는 점심은?",
+            {"location": {"lat": 36, "lng": 127}, "criteria": ["allergen-milk"]},
+            parse=lambda _: {"menu": "점심", "result_filter": "matched"},
+            search=lambda filters: filters,
+        )
+        self.assertNotIn("menu", result)
+        self.assertEqual(result["result_filter"], "all")
+        self.assertEqual(result["criteria"], ["allergen-milk"])
+
+
+    def test_lunch_drops_stale_menu_and_restaurant_filters(self):
+        previous = {
+            "location": {"lat": 36, "lng": 127},
+            "criteria": ["allergen-milk"],
+            "menu": "\uae40\ubc25",
+            "restaurant": "\uc2e0\ucc3d\uac00\ub77d\uad6d\uc218",
+        }
+        for message in (
+            "\uc21c\ucc9c\ud5a5\ub300 \uadfc\ucc98\uc5d0\uc11c \uc810\uc2ec \ucd94\ucc9c\ud574\uc918",
+            "\uc21c\ucc9c\ud5a5\ub300 \uadfc\ucc98\uc5d0\uc11c \ubb50\uba39\uc744\uae4c? \ub0b4\uac00 \uba39\uc744 \uc218 \uc788\ub294 \uc74c\uc2dd\uc73c\ub85c.",
+        ):
+            for parsed in ({}, {"menu": previous["menu"], "restaurant": previous["restaurant"]}):
+                _, result = chat(
+                    message,
+                    previous, parse=lambda _: parsed, search=lambda filters: filters,
+                )
+                self.assertNotIn("menu", result)
+                self.assertNotIn("restaurant", result)
+                self.assertEqual(result["criteria"], previous["criteria"])
