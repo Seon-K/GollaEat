@@ -1,35 +1,34 @@
-import { MASCOT_SRC } from "@/assets/brand";
+import { LOGO_NO_BG_SRC, LOGO_WITH_BG_SRC } from "@/assets/brand";
 
 interface MascotLogoProps {
   className?: string;
-  /** accent-light 라운드 박스 래퍼 (스플래시용) */
+  /**
+   * landing: logo_with_bg.svg (스플래시 전용)
+   * default: logo_no_bg.svg (그 외 모든 화면)
+   */
+  variant?: "landing" | "default";
+  /** @deprecated variant="landing" 사용. accent-light 래퍼는 더 이상 쓰지 않음 */
   framed?: boolean;
   alt?: string;
 }
 
-/** 마스코트 로고 — src는 @/assets/brand 의 MASCOT_SRC 단일 소스 */
+/** 마스코트 로고 — @/assets/brand 의 SVG 단일 소스 */
 export function MascotLogo({
   className = "size-28",
+  variant = "default",
   framed = false,
   alt = "골라잇",
 }: MascotLogoProps) {
-  const img = (
+  const isLanding = variant === "landing" || framed;
+  const src = isLanding ? LOGO_WITH_BG_SRC : LOGO_NO_BG_SRC;
+
+  return (
     <img
-      src={MASCOT_SRC}
+      src={src}
       alt={alt}
-      className={framed ? "size-[72%] object-contain" : className}
+      className={`${className} object-contain`}
       draggable={false}
       decoding="async"
     />
-  );
-
-  if (!framed) return img;
-
-  return (
-    <div
-      className={`flex items-center justify-center rounded-[36px] bg-accent-light ${className}`}
-    >
-      {img}
-    </div>
   );
 }

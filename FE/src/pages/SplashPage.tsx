@@ -16,7 +16,7 @@ export default function SplashPage() {
   return (
     <main className="flex min-h-[100dvh] flex-col bg-background px-6 pb-8 pt-10">
       <div className="flex flex-1 flex-col items-center justify-center text-center">
-        <MascotLogo framed className="size-40" />
+        <MascotLogo variant="landing" className="size-40" />
         <h1 className="mt-9 text-[26px] font-bold leading-snug tracking-tight text-text">
           내 몸에 맞는 한 끼를
           <br />

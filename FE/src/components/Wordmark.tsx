@@ -1,6 +1,6 @@
-import { MASCOT_SRC, BRAND_EN } from "@/assets/brand";
+import { LOGO_NO_BG_SRC, BRAND_EN } from "@/assets/brand";
 
-/** p17 메인 로고 · 워드마크 (마스코트 + GollaEat) */
+/** p17 메인 로고 · 워드마크 (logo_no_bg + GollaEat) */
 export function Wordmark({
   className = "",
   size = "md",
@@ -16,12 +16,12 @@ export function Wordmark({
       className={`inline-flex items-center gap-2 ${className}`}
       aria-label={`${BRAND_EN} 로고`}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={MASCOT_SRC}
+        src={LOGO_NO_BG_SRC}
         alt=""
         className={`${mascot} object-contain`}
         draggable={false}
+        decoding="async"
       />
       <span
         className={`${text} font-bold tracking-tight text-[#5D4037]`}
