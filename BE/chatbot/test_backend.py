@@ -1,7 +1,7 @@
 import uuid
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from dietary.models import Criterion, Profile
 from chatbot.backend import BackendSearch
 from chatbot.chatbot import chat
@@ -59,6 +59,7 @@ class BackendSearchTests(TestCase):
             self.search(dict(self.search.initial_state(), ingredients=['없는 재료']))
         self.catalog.search_menus.assert_not_called()
 
+    @override_settings(CATALOG_USE_DB=False)
     def test_coordinate_search_uses_catalog_services(self):
         from chatbot.catalog_search import nearby_menus, validate_location
         with patch('chatbot.catalog_search.get_repository') as factory:
@@ -84,7 +85,6 @@ class BackendSearchTests(TestCase):
 
 class DatabaseSearchQueryTests(TestCase):
     def test_many_menus_use_two_candidate_queries(self):
-        from django.test import override_settings
         from catalog.models import Restaurant, Menu
         from chatbot.catalog_search import nearby_menus
         store = Restaurant.objects.create(place_id='near', name='Near', latitude=36, longitude=127)
