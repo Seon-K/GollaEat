@@ -431,6 +431,10 @@ Restaurant aggregation and representative selection use the same filtered menu c
 An empty dietary profile never counts as match.
 
 Apply `python manage.py migrate`, then `python manage.py rebuild_dietary_index` before serving traffic.
+Migration `0011_fix_dietary_trigger_timestamp` also repairs PostgreSQL functions
+installed before the explicit timestamp cast was added to `0009`. Existing databases
+must run `migrate`; changing the migration source alone does not update stored functions.
+This repair replaces function bodies without deleting or rebuilding index rows.
 `--batch-size=1000` controls bounded evaluation batches; `--force` rebuilds all statuses.
 Catalog/allergen/analysis import commands rebuild dirty entries after successful writes.
 Database triggers invalidate affected menu revisions even for bulk/direct SQL changes;

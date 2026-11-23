@@ -35,7 +35,9 @@ def install(apps, schema_editor):
             update = f"UPDATE {STATE} SET dirty=TRUE, revision=revision+1, valid_until=NULL"
             if not global_change:
                 changed = affected(table, refs)
-                select = f"SELECT DISTINCT c.menu_id, 1, TRUE, NULL, '', '', '' FROM ({changed}) c JOIN catalog_menu m ON m.preprocess_row_id=c.menu_id WHERE c.menu_id IS NOT NULL"
+                # DISTINCT resolves an untyped NULL to text on PostgreSQL.
+                expiry = "NULL::timestamp with time zone" if connection.vendor == "postgresql" else "NULL"
+                select = f"SELECT DISTINCT c.menu_id, 1, TRUE, {expiry}, '', '', '' FROM ({changed}) c JOIN catalog_menu m ON m.preprocess_row_id=c.menu_id WHERE c.menu_id IS NOT NULL"
             if connection.vendor == "postgresql":
                 body = update + ";" if global_change else (f"INSERT INTO {STATE} (menu_id,revision,dirty,valid_until,search_text,name_key,category_key) {select} ON CONFLICT (menu_id) DO UPDATE SET dirty=TRUE, revision={STATE}.revision+1,valid_until=NULL;")
                 schema_editor.execute(f"CREATE FUNCTION {name}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN {body} RETURN NULL; END $$")
