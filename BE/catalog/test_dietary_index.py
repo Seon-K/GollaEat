@@ -3,11 +3,12 @@ from datetime import timedelta
 from unittest.mock import patch
 from django.db import connection
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from dietary.models import Profile, Criterion
 from .models import Restaurant, Menu, FoodDeclaration, CatalogSource, MenuDietaryState
 from .db_repository import DatabaseCatalogRepository
-from .dietary_index import rebuild, next_boundaries
+from .dietary_index import available, rebuild, next_boundaries
 from .services import list_menus
 from .discovery import discover_restaurants
 
@@ -31,6 +32,40 @@ class DietaryIndexTests(TestCase):
 
     def menus(self, **extra):
         return list_menus(dict(sort='dietary', limit='20', **extra), DatabaseCatalogRepository(), profile=self.profile)
+
+    def test_cold_index_creation_and_warm_query_have_the_same_results(self):
+        MenuDietaryState.objects.update(dirty=True, engine_version=0, evaluation_data=None)
+        available()  # Do not count one-time schema introspection as search work.
+        with patch('catalog.dietary_index.rebuild', wraps=rebuild) as build, CaptureQueriesContext(connection) as cold:
+            first = self.menus(judgement_status='match')
+        build.assert_called_once()
+        self.assertEqual(first['pagination']['total'], 15)
+        self.assertFalse(MenuDietaryState.objects.filter(dirty=True).exists())
+
+        with patch('catalog.dietary_index.rebuild', side_effect=AssertionError('warm query must not rebuild')), patch.object(
+                DatabaseCatalogRepository, 'get_dietary_components', side_effect=AssertionError('warm query must use snapshots')), CaptureQueriesContext(connection) as warm:
+            repeated = self.menus(judgement_status='match')
+        self.assertEqual(repeated, first)
+        self.assertGreater(len(cold), len(warm))
+        self.assertFalse(any(q['sql'].lstrip().upper().startswith(('INSERT', 'UPDATE', 'DELETE')) for q in warm))
+
+    def test_warm_query_count_is_constant_when_menu_count_grows(self):
+        available()
+        with CaptureQueriesContext(connection) as before:
+            initial = self.menus()
+        Menu.objects.bulk_create([
+            Menu(preprocess_row_id=f'extra-{index:03}', restaurant=self.store, name=f'Extra {index:03}',
+                 category='Food', price_amount=index * 100)
+            for index in range(60)
+        ])
+        rebuild()  # Measure ready-index reads separately from ingestion work.
+        with patch('catalog.dietary_index.rebuild', side_effect=AssertionError('index already prepared')), patch.object(
+                DatabaseCatalogRepository, 'get_dietary_components', side_effect=AssertionError('no full evidence reads')), CaptureQueriesContext(connection) as after:
+            grown = self.menus()
+        self.assertEqual(initial['pagination']['total'], 45)
+        self.assertEqual(grown['pagination']['total'], 105)
+        self.assertEqual(len(grown['results']), 20)
+        self.assertEqual(len(after), len(before))
 
     def test_menu_parity_all_filters_pages_and_only_page_evidence(self):
         repo = DatabaseCatalogRepository()

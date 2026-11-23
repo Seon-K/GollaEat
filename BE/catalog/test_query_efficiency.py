@@ -28,7 +28,8 @@ class LegacyReadRepository:
                 if r['latitude'] is not None and r['longitude'] is not None}
 
 
-@override_settings(CATALOG_USE_DB=True)
+# These SQL budgets cover candidate/page reads, not index creation or maintenance.
+@override_settings(CATALOG_USE_DB=True, CATALOG_DIETARY_INDEX_ENABLED=False)
 class MenuQueryEfficiencyTests(TestCase):
     @classmethod
     def setUpTestData(cls):

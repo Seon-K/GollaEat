@@ -1,4 +1,5 @@
 import uuid
+from importlib import import_module
 from unittest.mock import patch
 from django.test import TestCase, override_settings
 from dietary.models import Profile, Criterion
@@ -8,10 +9,13 @@ from .discovery import discover_restaurants, parse_area
 from .services import MenuQueryError
 
 
-@override_settings(CATALOG_USE_DB=True)
+# Exercise the original evaluator path; indexed parity has its own real-data tests.
+@override_settings(CATALOG_USE_DB=True, CATALOG_DIETARY_INDEX_ENABLED=False)
 class DiscoveryTests(TestCase):
     @classmethod
     def setUpTestData(cls):
+        # Lazy imports must not retain this class's mocked evaluator in later tests.
+        import_module('catalog.dietary_search')
         cls.profile = Profile.objects.create(guest_id=uuid.uuid4())
         cls.profile.criteria.add(Criterion.objects.get(code='allergen-milk'))
         cls.empty_profile = Profile.objects.create(guest_id=uuid.uuid4())
