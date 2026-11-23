@@ -144,6 +144,7 @@ export const apiProvider: DataProvider = {
     const res = await apiPost<ApiChatResponse>("/api/chat", {
       message: input.message,
       location: input.location,
+      radius_m: input.radius_m,
     });
     return adaptChatResponse(res);
   },

@@ -147,12 +147,13 @@ export default function AiPage() {
   const send = async (
     text: string,
     locationOverride?: { lat: number; lng: number } | null,
+    radiusM?: number,
   ) => {
     const trimmed = text.trim();
-    if ((!trimmed && !locationOverride) || sending) return;
+    if ((!trimmed && !locationOverride && radiusM === undefined) || sending) return;
     setSending(true);
     setInput("");
-    setMessages((prev) => [
+    if (radiusM === undefined) setMessages((prev) => [
       ...prev,
       { id: `u-${Date.now()}`, role: "user", text: trimmed || "이 위치에서 검색해 주세요." },
     ]);
@@ -163,10 +164,9 @@ export default function AiPage() {
         lng: SCH_ORIGIN.lng,
       };
     try {
-      const result = await getDataProvider().postChat({
-        message: trimmed,
-        location,
-      });
+      const result = await getDataProvider().postChat(
+        radiusM === undefined ? { message: trimmed, location } : { message: "", radius_m: radiusM },
+      );
       if (result.state?.location && typeof result.state.location === "object") {
         const loc = result.state.location as { lat?: unknown; lng?: unknown };
         if (typeof loc.lat === "number" && typeof loc.lng === "number") {
@@ -188,6 +188,7 @@ export default function AiPage() {
             ? e.message
             : "응답을 받지 못했습니다.";
       setToast(msg);
+      if (radiusM !== undefined) return;
       setMessages((prev) => [
         ...prev,
         {
@@ -376,6 +377,21 @@ export default function AiPage() {
                       />
                     ))}
                   </section>
+                ) : null}
+                {isLatest && m.result.radiusM !== null ? (
+                  <p className="text-center text-sm text-muted">
+                    검색 반경 {m.result.radiusM / 1000}km
+                  </p>
+                ) : null}
+                {isLatest && m.result.nextRadiusM !== undefined ? (
+                  <button
+                    type="button"
+                    disabled={sending}
+                    onClick={() => void send("", null, m.result.nextRadiusM)}
+                    className="w-full rounded-xl border border-[#e5e8e6] bg-card px-4 py-3 text-sm font-bold disabled:opacity-50"
+                  >
+                    범위 넓히기 · {m.result.nextRadiusM / 1000}km로 검색
+                  </button>
                 ) : null}
               </div>
             );

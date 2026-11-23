@@ -269,6 +269,7 @@ export interface ApiChatResponse {
     needs_check?: unknown[];
     criteria?: string[];
     radius_m?: number;
+    next_radius_m?: number | null;
     question?: string;
     place_candidates?: ApiChatPlaceCandidate[];
     [key: string]: unknown;
