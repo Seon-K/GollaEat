@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.test import Client, TestCase
 
-from catalog.models import Restaurant, Menu, InformationReport, ReportEvent
+from catalog.models import Restaurant, Menu, InformationReport, ReportEvent, FoodDeclaration, CatalogSource, MenuAnalysisReference
 from dietary.models import Criterion, Profile, Review, SupportRule
 
 
@@ -69,6 +69,53 @@ class ManageTests(TestCase):
         self.menu.refresh_from_db()
         self.assertEqual(self.menu.price_amount, 5000)
         self.assertTrue(self.admin.logentry_set.exists())
+
+    def test_existing_reference_allergens_are_visible_without_declarations(self):
+        MenuAnalysisReference.objects.create(menu=self.menu, public_allergens='밀 | 대두')
+        response = self.client.get('/api/manage/menus')
+        row = response.json()['results'][0]
+        self.assertEqual(row['reference_allergens'], '밀 | 대두')
+        self.assertEqual(row['allergens'], [])
+        self.assertEqual(self.send('menus/menu', {'allergens': []}).status_code, 200)
+        self.assertEqual(self.client.get('/api/manage/menus/menu').json()['reference_allergens'], '')
+
+    def test_menu_allergen_add_edit_delete(self):
+        source = CatalogSource.objects.create(title='매장 확인', source_type='store')
+        row = {'name_raw': '우유', 'canonical_tag': 'milk', 'presence': 'present',
+               'verification_status': 'verified', 'source_id': source.pk,
+               'confirmed_at': '2026-11-25T00:00:00+09:00', 'unknown_scope': '', 'applicability_scope': '메뉴'}
+        response = self.send('menus/menu', {'allergens': [row]})
+        self.assertEqual(response.status_code, 200, response.content)
+        saved = response.json()['allergens'][0]
+        self.assertEqual(saved['canonical_tag'], 'milk')
+        self.assertEqual(self.client.get('/api/manage/menus/menu').json()['allergens'], [saved])
+        saved['presence'] = 'absent'
+        self.assertEqual(self.send('menus/menu', {'allergens': [saved]}).status_code, 200)
+        self.assertEqual(FoodDeclaration.objects.get(pk=saved['id']).presence, 'absent')
+        ingredient = FoodDeclaration.objects.create(menu=self.menu, kind='ingredient', name_raw='양파')
+        self.assertEqual(self.send('menus/menu', {'allergens': []}).status_code, 200)
+        self.assertTrue(FoodDeclaration.objects.filter(pk=ingredient.pk).exists())
+        self.assertFalse(self.menu.declarations.filter(kind='allergen').exists())
+
+    def test_invalid_allergens_roll_back_menu_and_declarations(self):
+        row = {'name_raw': '우유', 'canonical_tag': 'milk', 'presence': 'present', 'verification_status': 'unverified'}
+        for bad in [None, {}, [row, dict(row, verification_status='verified')], [dict(row, id=999)], [dict(row, canonical_tag='invalid')]]:
+            with self.subTest(bad=bad):
+                response = self.send('menus/menu', {'name': '변경 금지', 'allergens': bad})
+                self.assertEqual(response.status_code, 400, response.content)
+                self.menu.refresh_from_db()
+                self.assertEqual(self.menu.name, '메뉴')
+                self.assertFalse(self.menu.declarations.exists())
+
+    def test_allergen_cannot_edit_another_menu_and_requires_menu_permission(self):
+        other = Menu.objects.create(preprocess_row_id='other', restaurant=self.restaurant, name='다른 메뉴')
+        declaration = FoodDeclaration.objects.create(menu=other, kind='allergen', name_raw='우유')
+        self.assertEqual(self.send('menus/menu', {'allergens': [{'id': declaration.pk}]}).status_code, 400)
+        employee = get_user_model().objects.create_user('allergen-reader', is_staff=True)
+        employee.user_permissions.add(Permission.objects.get(codename='view_menu', content_type__app_label='catalog'))
+        self.client.force_login(employee)
+        self.assertEqual(self.client.get('/api/manage/allergen-options').status_code, 200)
+        self.assertEqual(self.send('menus/menu', {'allergens': []}).status_code, 403)
 
     def test_criteria_registration_and_deactivation(self):
         response = self.send('criteria', {'code': 'test-milk', 'name': '우유', 'kind': 'allergen', 'category': '', 'active': True}, 'post')
