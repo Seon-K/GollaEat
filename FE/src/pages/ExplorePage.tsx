@@ -1,4 +1,5 @@
 import { useGeolocation } from "@/hooks/useGeolocation";
+import { SkeletonBlock } from "@/components/LoadingSkeleton";
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
@@ -19,8 +20,8 @@ import { Pagination } from "@/components/Pagination";
 import { formatConditionBanner } from "@/lib/conditionBanner";
 import { useProfileStore } from "@/store/profileStore";
 
-export default function ExplorePage() {
-  const geo = useGeolocation({ autoRequest: true });
+export default function ExplorePage({ bootstrapping = false }: { bootstrapping?: boolean } = {}) {
+  const geo = useGeolocation({ autoRequest: !bootstrapping });
   const [useGps, setUseGps] = useState(true);
   const hasGps = useGps && geo.position !== null;
   const origin = hasGps ? geo.position! : ASAN_ORIGIN;
@@ -36,7 +37,7 @@ export default function ExplorePage() {
   const storedScope = useDiscoveryFilters((s) => s.homePageScope);
   const setPage = useDiscoveryFilters((s) => s.setHomePage);
   const page = storedScope === scope ? storedPage : 1;
-  const restaurantsQuery = useQuery({ ...homeRestaurantsOptions({ ...params, page }, profile), placeholderData: keepPreviousData });
+  const restaurantsQuery = useQuery({ ...homeRestaurantsOptions({ ...params, page }, profile), enabled: !bootstrapping, placeholderData: keepPreviousData });
   const items = restaurantsQuery.data?.items ?? [];
   const pagination = restaurantsQuery.data?.pagination;
   const changePage = (next: number) => {
@@ -44,26 +45,27 @@ export default function ExplorePage() {
     setPage(next, scope);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
-  const loading = !restaurantsQuery.isError &&
+  const loading = bootstrapping || !restaurantsQuery.isError &&
     (restaurantsQuery.isPending || restaurantsQuery.isFetching || restaurantsQuery.isPlaceholderData || query !== filters.query);
   return <main className="min-h-[100dvh] bg-background pb-24">
-    <div className="px-5 pt-5">
+    <fieldset disabled={bootstrapping} className="contents"><div className="px-5 pt-5">
       <button type="button" onClick={() => setLocationOpen(true)} className="inline-flex items-center gap-1 text-[14px] font-semibold text-primary touch-target">
         <MapPin className="size-4" strokeWidth={2.4} />{hasGps ? "현재 위치" : "충남 아산시"}<ChevronDown className="size-4" />
       </button>
       <h1 className="mt-3 text-[24px] font-bold leading-snug text-text">오늘은 어떤 메뉴가<br />먹고 싶나요?</h1>
       <div className="mt-4"><DiscoverySearch value={filters.query} onChange={(query) => update("home", { query })} /></div>
-      <div className="mt-3"><span className="inline-flex items-center rounded-full bg-primary-light px-3 py-1.5 text-[12px] font-medium text-primary">{formatConditionBanner(allergens, restrictions)}</span></div>
+      <div className="mt-3"><span className="inline-flex items-center rounded-full bg-primary-light px-3 py-1.5 text-[12px] font-medium text-primary">{bootstrapping ? <SkeletonBlock className="h-4 w-24" /> : formatConditionBanner(allergens, restrictions)}</span></div>
       <section className="mt-6"><h2 className="mb-3 text-[16px] font-bold text-text">내 조건에 맞는 식당</h2>
         <div className="relative z-20 mb-4"><DiscoveryControls value={filters} onChange={(patch) => update("home", patch)} showSearch={false} /></div>
-        {restaurantsQuery.isError && <ApiErrorPanel error={restaurantsQuery.error} onRetry={() => void restaurantsQuery.refetch()} />}
+        {!bootstrapping && restaurantsQuery.isError && <ApiErrorPanel error={restaurantsQuery.error} onRetry={() => void restaurantsQuery.refetch()} />}
         {loading ? <DiscoverySkeleton variant="restaurant" /> : <div className="space-y-3">{items.map((restaurant) => <RestaurantCard status={filters.status} key={restaurant.id} restaurant={restaurant} selected={selected?.id === restaurant.id} showDistance={hasGps} onSelect={() => setSelected(restaurant)} />)}</div>}
         {!loading && !restaurantsQuery.isError && !items.length && <p className="py-10 text-center text-sm text-muted">조건에 맞는 식당이 없습니다.</p>}
         {pagination && <Pagination page={page} totalPages={pagination.totalPages} disabled={loading} onChange={changePage} />}
         {!loading && pagination && pagination.total > 0 && <p className="mt-3 text-center text-xs text-muted">총 {pagination.total.toLocaleString()}곳 · {page} / {pagination.totalPages}페이지</p>}
       </section>
     </div>
-    <Link to="/ai" aria-label="AI 메뉴 추천" className="fixed bottom-20 right-[max(1rem,calc(50%-215px+1rem))] z-30 inline-flex size-14 items-center justify-center rounded-full bg-primary text-white shadow-lg"><MessageCircle className="size-6" /></Link>
+    </fieldset>
+    {!bootstrapping && <Link to="/ai" aria-label="AI 메뉴 추천" className="fixed bottom-20 right-[max(1rem,calc(50%-215px+1rem))] z-30 inline-flex size-14 items-center justify-center rounded-full bg-primary text-white shadow-lg"><MessageCircle className="size-6" /></Link>}
     <BottomNav />
     <BottomSheet open={!!selected} onClose={() => setSelected(null)} title={selected?.name}>
       <div className="pb-3">

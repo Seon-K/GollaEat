@@ -68,7 +68,7 @@ export const apiProvider: DataProvider = {
   },
 
   async getMenu(menuId, options) {
-    const res = await apiGet<ApiMenuDetail>(`/api/menus/${menuId}`, undefined, options);
+    const res = await apiGet<ApiMenuDetail>(`/api/menus/${menuId}`, { view: "display" }, options);
     return adaptMenuDetail(res);
   },
 

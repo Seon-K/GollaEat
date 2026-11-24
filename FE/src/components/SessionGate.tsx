@@ -1,3 +1,5 @@
+import ExplorePage from "@/pages/ExplorePage";
+import { MenuDetailSkeleton } from "./MenuDetailSkeleton";
 import { createContext, useContext } from "react";
 import { useLocation } from "react-router-dom";
 import { ProfileCacheSync } from "./AppProviders";
@@ -88,6 +90,8 @@ export function SessionGate({ children }: { children: ReactNode }) {
   }
 
   if (!ready) {
+    if (pathname === "/explore") return <ExplorePage bootstrapping />;
+    if (/^\/menu\/[^/]+$/.test(pathname)) return <MenuDetailSkeleton />;
     return (
       <main className="min-h-[100dvh] bg-background px-5 pb-24 pt-6">
         <LoadingSkeleton variant="page" />
