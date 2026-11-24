@@ -9,7 +9,7 @@ from .models import Menu, MenuAnalysisReference, Restaurant
 class MenuDisplayTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        store = Restaurant.objects.create(place_id='display-store', name='Store')
+        store = Restaurant.objects.create(place_id='display-store', name='Store', phone='041-123-4567')
         menu = Menu.objects.create(preprocess_row_id='display-menu', restaurant=store, name='Menu', price_amount=9000)
         MenuAnalysisReference.objects.create(menu=menu, payload={'raw': 'large data' * 1000})
 
@@ -20,6 +20,7 @@ class MenuDisplayTests(TestCase):
         self.assertEqual(response.status_code, 200)
         full['analysis_reference'] = None
         self.assertEqual(response.json(), full)
+        self.assertEqual(response.json()['phone'], '041-123-4567')
         self.assertFalse(any('catalog_menuanalysisreference' in q['sql'] for q in queries))
 
     def test_rejects_unknown_display_mode(self):

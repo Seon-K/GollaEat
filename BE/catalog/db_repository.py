@@ -260,7 +260,7 @@ class DatabaseCatalogRepository:
             'applicability_scope': link.payload.get('allergen_declaration_scope'),
             'original_verification_status': link.payload.get('verification_status'),
             'source': source_json(link.source)}
-        return dict(menu, allergen_information={'allergens_contains_normalized': None,
+        return dict(menu, phone=row.restaurant.phone or None, allergen_information={'allergens_contains_normalized': None,
             'declarations': declarations, 'brand_reference': reference},
             analysis_reference=analysis_json(getattr(row, 'analysis_reference', None)) if include_analysis else None,
             original_information={'description_raw': menu.get('description')},
