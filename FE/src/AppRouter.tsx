@@ -8,24 +8,25 @@ import {
 } from "react-router-dom";
 import { lazy, Suspense, type ReactNode } from "react";
 import SplashPage from "@/pages/SplashPage";
-import OnboardingPage from "@/pages/OnboardingPage";
-import SetupAllergenPage from "@/pages/SetupAllergenPage";
-import SetupRestrictionPage from "@/pages/SetupRestrictionPage";
-import SetupConfirmPage from "@/pages/SetupConfirmPage";
-import MapPage from "@/pages/MapPage";
 import ExplorePage from "@/pages/ExplorePage";
-import MyPage from "@/pages/MyPage";
-import AiPage from "@/pages/AiPage";
-import MenuDetailPage from "@/pages/MenuDetailPage";
-import MenuReasoningPage from "@/pages/MenuReasoningPage";
-import MenuInquiryPage from "@/pages/MenuInquiryPage";
-import MenuReportPage from "@/pages/MenuReportPage";
-import ShowStaffPage from "@/pages/ShowStaffPage";
-import DesignSystemPage from "@/pages/DesignSystemPage";
 import { SessionGate } from "@/components/SessionGate";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { PhoneFrame } from "@/components/PhoneFrame";
 import { ManageRouteSkeleton } from "@/admin/ManageSkeleton";
 
+const OnboardingPage = lazy(() => import("@/pages/OnboardingPage"));
+const SetupAllergenPage = lazy(() => import("@/pages/SetupAllergenPage"));
+const SetupRestrictionPage = lazy(() => import("@/pages/SetupRestrictionPage"));
+const SetupConfirmPage = lazy(() => import("@/pages/SetupConfirmPage"));
+const MapPage = lazy(() => import("@/pages/MapPage"));
+const MyPage = lazy(() => import("@/pages/MyPage"));
+const AiPage = lazy(() => import("@/pages/AiPage"));
+const MenuDetailPage = lazy(() => import("@/pages/MenuDetailPage"));
+const MenuReasoningPage = lazy(() => import("@/pages/MenuReasoningPage"));
+const MenuInquiryPage = lazy(() => import("@/pages/MenuInquiryPage"));
+const MenuReportPage = lazy(() => import("@/pages/MenuReportPage"));
+const ShowStaffPage = lazy(() => import("@/pages/ShowStaffPage"));
+const DesignSystemPage = lazy(() => import("@/pages/DesignSystemPage"));
 const ManageApp = lazy(() => import("@/admin/ManageApp"));
 function UserSessionBoundary({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
@@ -48,6 +49,7 @@ export function AppRouter() {
   return (
     <BrowserRouter>
       <UserSessionBoundary>
+      <Suspense fallback={<main className="min-h-[100dvh] bg-background p-5"><LoadingSkeleton variant="page" /></main>}>
       <Routes>
         <Route path="/manage/*" element={<Suspense fallback={<ManageRouteSkeleton />}><ManageApp /></Suspense>} />
         <Route path="/" element={<SplashPage />} />
@@ -90,6 +92,7 @@ export function AppRouter() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
       </UserSessionBoundary>
     </BrowserRouter>
   );
