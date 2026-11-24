@@ -1,4 +1,4 @@
-import { useRef, useState, type RefObject, type PointerEvent, type KeyboardEvent } from "react";
+import { useCallback, useRef, useState, type RefObject, type PointerEvent, type KeyboardEvent } from "react";
 
 export function nearestSheetSnap(height: number, viewport: number, points: readonly number[]) {
   return points.reduce((best, point, index) => Math.abs(point * viewport / 100 - height) <
@@ -7,8 +7,14 @@ export function nearestSheetSnap(height: number, viewport: number, points: reado
 
 /** Shared pointer/keyboard control; content scrolling never initiates a resize. */
 export function useSheetResize(ref: RefObject<HTMLElement | null>, points: readonly number[], initial = 1) {
-  const [snap, setSnap] = useState(initial);
+  const [snap, setSnapState] = useState(initial);
+  const [settledHeight, setSettledHeight] = useState<number | null>(null);
   const [liveHeight, setLiveHeight] = useState<number | null>(null);
+  const setSnap = useCallback((value: number | ((previous: number) => number)) => {
+    setSettledHeight(null);
+    setLiveHeight(null);
+    setSnapState(value);
+  }, []);
   const drag = useRef<{ y: number; height: number; viewport: number; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
   const heightAt = (y: number) => {
@@ -19,15 +25,26 @@ export function useSheetResize(ref: RefObject<HTMLElement | null>, points: reado
   const end = (event: PointerEvent<HTMLButtonElement>, cancel = false) => {
     const start = drag.current;
     if (!start) return;
-    if (!cancel && start.moved) setSnap(nearestSheetSnap(heightAt(event.clientY), start.viewport, points));
+    if (!cancel && start.moved) {
+      const height = heightAt(event.clientY);
+      const nearest = nearestSheetSnap(height, start.viewport, points);
+      const target = points[nearest] * start.viewport / 100;
+      // Keep the released height unless it is close to an intentional snap.
+      setSnapState(nearest);
+      setSettledHeight(Math.abs(height - target) <= 18 ? null : height);
+    }
     suppressClick.current = start.moved;
     drag.current = null; setLiveHeight(null);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
   const toggle = () => setSnap((value) => value === points.length - 1 ? initial : points.length - 1);
+  const pixels = liveHeight ?? settledHeight;
+  const percent = pixels === null ? points[snap] : pixels * 100 / (typeof window === "undefined" ? 800 : window.innerHeight);
   return {
+    atMinimum: percent <= points[0] + 2, atMaximum: percent >= points[points.length - 1] - 2,
+    percent,
     snap, setSnap, toggle, dragging: liveHeight !== null,
-    height: liveHeight === null ? `${points[snap]}dvh` : `${liveHeight}px`,
+    height: pixels === null ? `${points[snap]}dvh` : `${pixels}px`,
     handleProps: {
       onPointerDown(event: PointerEvent<HTMLButtonElement>) {
         if (event.button !== 0) return;
@@ -38,7 +55,7 @@ export function useSheetResize(ref: RefObject<HTMLElement | null>, points: reado
       },
       onPointerMove(event: PointerEvent<HTMLButtonElement>) {
         if (!drag.current) return;
-        if (Math.abs(event.clientY - drag.current.y) > 3) drag.current.moved = true;
+        if (Math.abs(event.clientY - drag.current.y) > 6) drag.current.moved = true;
         if (drag.current.moved) setLiveHeight(heightAt(event.clientY));
       },
       onPointerUp: (event: PointerEvent<HTMLButtonElement>) => end(event),

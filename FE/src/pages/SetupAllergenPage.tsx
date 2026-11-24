@@ -8,7 +8,7 @@ import {
   SetupProgressBar,
   SetupStepLabel,
 } from "@/components/setup/SetupProgress";
-import { ALLERGENS, allergenLabel } from "@/data/allergens";
+import { ALLERGENS, allergenLabel, allergenSearchLabels } from "@/data/allergens";
 import { useProfileStore } from "@/store/profileStore";
 import type { AllergenId } from "@/types";
 
@@ -27,7 +27,7 @@ function AllergenSetupContent() {
   const filtered = useMemo(() => {
     const q = query.trim();
     if (!q) return ALLERGENS;
-    return ALLERGENS.filter((a) => a.label.includes(q));
+    return ALLERGENS.filter((a) => allergenSearchLabels(a.id).some((label) => label.includes(q)));
   }, [query]);
 
   const goNext = () => {
@@ -50,7 +50,7 @@ function AllergenSetupContent() {
           피하시나요?
         </h1>
         <p className="mt-2 text-[14px] text-muted">
-          해당하는 항목을 모두 선택해 주세요.
+          해당하는 항목을 모두 선택해 주세요. 견과류에는 땅콩·호두·잣이 포함됩니다.
         </p>
         <div className="mt-4">
           <SetupProgressBar step={1} />
@@ -86,7 +86,7 @@ function AllergenSetupContent() {
         ) : null}
 
         <p className="mt-6 text-[15px] font-bold text-text">
-          알레르기 유발물질 19종
+          알레르겐 {ALLERGENS.length}종 · 서버 기준
         </p>
         <div className="mt-3 grid grid-cols-3 gap-2 pb-4">
           {filtered.map((a) => {

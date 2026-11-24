@@ -4,7 +4,7 @@ import type {
   RestrictionId,
 } from "@/types";
 
-/** p08 카테고리 구조 */
+/** 백엔드 dietary-criteria의 ingredient 12종 및 분류와 동일. */
 export const RESTRICTIONS: RestrictedIngredient[] = [
   { id: "beef", label: "소고기", category: "육류" },
   { id: "pork", label: "돼지고기", category: "육류" },
@@ -13,18 +13,17 @@ export const RESTRICTIONS: RestrictedIngredient[] = [
   { id: "fish", label: "생선", category: "해산물" },
   { id: "crustacean", label: "갑각류", category: "해산물" },
   { id: "shellfish", label: "조개류", category: "해산물" },
-  { id: "egg", label: "달걀", category: "달걀 · 유제품" },
-  { id: "milk", label: "우유", category: "달걀 · 유제품" },
-  { id: "cheese_butter", label: "치즈·버터", category: "달걀 · 유제품" },
+  { id: "egg", label: "달걀", category: "달걀·유제품" },
+  { id: "milk", label: "우유", category: "달걀·유제품" },
+  { id: "cheese_butter", label: "치즈·버터", category: "달걀·유제품" },
   { id: "honey", label: "꿀", category: "기타 동물성 재료" },
   { id: "gelatin", label: "젤라틴", category: "기타 동물성 재료" },
-  { id: "animal_broth", label: "동물성 육수", category: "기타 동물성 재료" },
 ];
 
 export const RESTRICTION_CATEGORIES: RestrictionCategory[] = [
   "육류",
   "해산물",
-  "달걀 · 유제품",
+  "달걀·유제품",
   "기타 동물성 재료",
 ];
 
@@ -45,7 +44,6 @@ export const RESTRICTION_EXPANSION: Record<RestrictionId, string[]> = {
   cheese_butter: ["치즈", "버터", "유제품", "우유", "cheese", "butter"],
   honey: ["꿀", "honey"],
   gelatin: ["젤라틴", "gelatin"],
-  animal_broth: ["동물성 육수", "육수", "사골", "닭육수", "육수"],
 };
 
 export const restrictionLabel = (id: string): string =>
@@ -53,3 +51,11 @@ export const restrictionLabel = (id: string): string =>
 
 /** @deprecated RestrictedIngredient 사용 */
 export type RestrictionItem = RestrictedIngredient;
+
+
+const VALID_RESTRICTION_IDS = new Set(RESTRICTIONS.map(({ id }) => id));
+/** Discard retired UI-only selections; never substitute broader restrictions. */
+export function normalizeRestrictionIds(ids: readonly string[]): RestrictionId[] {
+  return [...new Set(ids.map((id) => id.replaceAll("-", "_")))].filter((id): id is RestrictionId =>
+    VALID_RESTRICTION_IDS.has(id as RestrictionId));
+}

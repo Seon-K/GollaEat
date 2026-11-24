@@ -22,8 +22,8 @@ def judgement_guidance(status, reasons, has_conditions):
     # 판정 결과와 근거 유형별 사용자 안내
     if status == 'match':
         if not has_conditions:
-            basis, label = 'no_restrictions', '선택된 제한 조건 없음'
-            message = '선택한 제한 조건이 없습니다. 이 결과는 성분의 포함·불포함을 확인했다는 의미가 아닙니다.'
+            basis, label = 'no_restrictions', '식이조건 일치'
+            message = '설정한 식이조건이 없어 모든 메뉴를 일치로 표시합니다. 성분의 포함·불포함을 확인했다는 의미는 아닙니다.'
         elif reasons and all(
             reason['condition'].startswith('allergen-') and any(
                 source.get('interpretation') == 'official_menu_allergen_list'

@@ -20,7 +20,6 @@ export function RestaurantMenuList({ restaurant, filters, origin, showDistance =
   showDistance?: boolean; onBack?: () => void;
 }) {
   const allergens = useProfileStore((s) => s.allergens), restrictions = useProfileStore((s) => s.restrictions);
-  const configured = allergens.length + restrictions.length > 0;
   const client = useQueryClient();
   const fav = useFavorites();
   const params = { ...filterParams(filters, ""), region: "아산시", restaurant_id: restaurant.id, personalize: true,
@@ -38,7 +37,7 @@ export function RestaurantMenuList({ restaurant, filters, origin, showDistance =
     {menus.isError && <ApiErrorPanel error={menus.error} onRetry={() => void menus.refetch()} />}
     {loading ? <DiscoverySkeleton /> : menus.data?.pages.flatMap((page) => page.items).map((m) => <MenuCard key={m.id}
       item={{ id: m.id, name: m.name, restaurantName: m.restaurantName, priceAmount: m.priceAmount,
-        distanceKm: showDistance ? m.distanceKm : null, status: configured ? m.judgement?.status ?? "check" : "check", saved: fav.isSaved(m.id, m.saved) }}
+        distanceKm: showDistance ? m.distanceKm : null, status: m.judgement?.status ?? "check", saved: fav.isSaved(m.id, m.saved) }}
       onDetailIntent={() => prefetchMenuDetail(client, m.id)}
       onToggleSave={() => fav.toggleSave(m.id, { ...m, saved: fav.isSaved(m.id, m.saved) })} saving={fav.isSaving(m.id)} />)}
     {menus.isFetchingNextPage && <DiscoverySkeleton count={2} />}

@@ -75,7 +75,7 @@ def documents(qs, params, restaurant_search=False):
 def ranks(qs, context):
     ids = [criterion.pk for criterion in context.criteria] if context is not None else []
     if not ids:
-        return qs.annotate(_rank=Value(1, output_field=IntegerField()))
+        return qs.annotate(_rank=Value(0 if context is not None else 1, output_field=IntegerField()))
     statuses = MenuDietaryStatus.objects.filter(menu_id=OuterRef('pk'), criterion_id__in=ids,
         menu_revision=OuterRef('dietary_state__revision')).order_by()
     if len(ids) == 1:
@@ -107,8 +107,6 @@ def hydrated_judgements(context, states):
         return {}
     context.component_data.update({mid: state.evaluation_data for mid, state in states.items()})
     result = {mid: evaluate(None, mid, context=context) for mid in states}
-    if not context.criteria:
-        result = {mid: dict(j, status='needs_check', sort_key=[1, 0, mid]) for mid, j in result.items()}
     return result
 
 
@@ -214,7 +212,7 @@ def indexed_restaurants(params, repository, profile):
         total = cards[0]['_total'] if cards else stores.count()
         results = [dict(restaurant_id=row['pk'], restaurant_name=row['name'], address=row['address'],
             latitude=row['latitude'], longitude=row['longitude'], distance_km=row['_distance'], dietary_summary=row['_summary'],
-            personalization={'applied': bool(context and context.criteria), 'profile_configured': bool(context and context.criteria)}) for row in cards]
+            personalization={'applied': context is not None, 'profile_configured': bool(context and context.criteria)}) for row in cards]
         return {'results': results, 'pagination': pagination(page, limit, len(results), total)}
     rows = list(stores.annotate(_total=Window(Count('pk'))).order_by(*order).values(
         'pk', '_distance', '_summary', '_minimum', '_representative', '_representative_rank', '_total')[(page-1)*limit:page*limit])
@@ -254,5 +252,5 @@ def indexed_restaurants(params, repository, profile):
             representative['judgement'] = judgements.get(row['_representative'])
         results.append(dict(details[row['pk']], distance_km=row['_distance'], min_menu_price=row['_minimum'],
             dietary_summary=row['_summary'],
-            representative_menu=representative, personalization={'applied': bool(context and context.criteria), 'profile_configured': bool(context and context.criteria)}))
+            representative_menu=representative, personalization={'applied': context is not None, 'profile_configured': bool(context and context.criteria)}))
     return {'results': results, 'pagination': pagination(page, limit, len(results), total)}

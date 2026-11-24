@@ -47,7 +47,7 @@ export default function MapPage() {
     lat: origin.lat, lng: origin.lng, ...(searchViewport ? { bounds: searchViewport.bounds } : { radius_km: 3 }), limit: 20 };
   const results = useInfiniteQuery({ queryKey: apiKeys.restaurants({ ...params, profile: [allergens, restrictions] }),
     enabled: !areaTooWide, placeholderData: keepPreviousData, initialPageParam: 1,
-    queryFn: ({ pageParam }) => getDataProvider().getRestaurants({ ...params, page: pageParam }),
+    queryFn: ({ pageParam, signal }) => getDataProvider().getRestaurants({ ...params, page: pageParam }, { signal }),
     getNextPageParam: (last) => last.pagination.nextPage ?? undefined });
   const restaurants = useMemo(() => {
     const seen = new Set<string>();
@@ -102,7 +102,7 @@ export default function MapPage() {
         {geo.status === "loading" ? <SkeletonBlock className="size-5" /> : <LocateFixed className="size-5" />}
       </button>
     </div>
-    <MapResultsSheet expanded={!!selected} onHeightChange={setSheetHeight} controlsHeight={controlsHeight}
+    <MapResultsSheet loading={restaurantLoading || results.isFetchingNextPage} expanded={!!selected} onHeightChange={setSheetHeight} controlsHeight={controlsHeight}
       controls={(side) => <DiscoveryControls value={filters} onChange={(patch) => update("map", patch)} distance showSearch={false} side={side} topBoundary={controlsHeight + 12} />}
       title={selected ? selected.name : "이 지도에서 추천하는 식당"}
       subtitle={selected ? "메뉴 카드를 누르면 상세 정보를 볼 수 있어요" : restaurantLoading ? <span aria-hidden="true" className="inline-block h-3 w-40 rounded-full bg-shell motion-safe:animate-pulse" /> : `총 ${total}곳 중 ${restaurants.length}곳 표시 · ${state.user ? "내 위치 기준 거리" : "지도 영역 기준"}`}>

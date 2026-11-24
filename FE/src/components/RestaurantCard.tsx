@@ -25,6 +25,7 @@ export function RestaurantCard({ restaurant: r, selected, onSelect, showDistance
               <Icon className="size-3.5 shrink-0" aria-hidden="true" />{label} {r.dietarySummary?.[key] ?? 0}개
             </span>)}
         </span> : <span className="mt-2 inline-block rounded-full bg-shell px-2 py-1 text-xs text-muted">식이조건 설정 후 판정 확인</span>}
+        {r.personalization?.applied && !r.personalization.profile_configured && <span className="mt-1 block text-xs text-muted">식이조건 미설정 · 모든 메뉴 일치</span>}
       </span>
       <ChevronRight className="mt-1 size-4 shrink-0 text-muted" aria-hidden />
     </button>

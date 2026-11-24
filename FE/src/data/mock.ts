@@ -101,7 +101,7 @@ export const MENUS: Menu[] = [
     price: 12000,
     category: "western",
     confirmedIngredients: ["면", "토마토소스", "새우", "파마산치즈", "버터"],
-    /** 기본 프로필(땅콩·우유·새우) 기준 mismatch */
+    /** 기본 프로필(견과류·우유·새우) 기준 mismatch */
     confirmedAllergens: ["밀", "새우", "우유"],
     unconfirmed: [],
     hasIngredientInfo: true,
@@ -144,10 +144,10 @@ export const INITIAL_REVIEWS: Review[] = [
   },
 ];
 
-/** 디자인·테스트용 기본 식이 프로필 (땅콩·우유·새우 + 소고기·돼지고기·동물성 육수) */
+/** 디자인·테스트용 기본 식이 프로필 (견과류·우유·새우 + 소고기·돼지고기) */
 export const DEMO_PROFILE = {
-  allergens: ["peanut", "milk", "shrimp"] as const,
-  restrictions: ["beef", "pork", "animal_broth"] as const,
+  allergens: ["nuts", "milk", "shrimp"] as const,
+  restrictions: ["beef", "pork"] as const,
 };
 
 export const getStore = (id: string): Store | undefined =>

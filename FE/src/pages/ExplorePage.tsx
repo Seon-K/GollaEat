@@ -1,5 +1,6 @@
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { SkeletonBlock } from "@/components/LoadingSkeleton";
+import { MascotLogo } from "@/components/MascotLogo";
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
@@ -52,7 +53,10 @@ export default function ExplorePage({ bootstrapping = false }: { bootstrapping?:
       <button type="button" onClick={() => setLocationOpen(true)} className="inline-flex items-center gap-1 text-[14px] font-semibold text-primary touch-target">
         <MapPin className="size-4" strokeWidth={2.4} />{hasGps ? "현재 위치" : "충남 아산시"}<ChevronDown className="size-4" />
       </button>
-      <h1 className="mt-3 text-[24px] font-bold leading-snug text-text">오늘은 어떤 메뉴가<br />먹고 싶나요?</h1>
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <h1 className="min-w-0 text-[24px] font-bold leading-snug text-text">오늘은 어떤 메뉴가<br />먹고 싶나요?</h1>
+        <MascotLogo className="size-16 shrink-0 min-[380px]:size-20" alt="" />
+      </div>
       <div className="mt-4"><DiscoverySearch value={filters.query} onChange={(query) => update("home", { query })} /></div>
       <div className="mt-3"><span className="inline-flex items-center rounded-full bg-primary-light px-3 py-1.5 text-[12px] font-medium text-primary">{bootstrapping ? <SkeletonBlock className="h-4 w-24" /> : formatConditionBanner(allergens, restrictions)}</span></div>
       <section className="mt-6"><h2 className="mb-3 text-[16px] font-bold text-text">내 조건에 맞는 식당</h2>

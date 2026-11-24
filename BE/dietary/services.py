@@ -73,7 +73,7 @@ class EvaluationContext:
                     raise ValueError('Unsupported criterion: ' + criterion.code)
 
     def prime(self, component_ids):
-        if not component_ids:
+        if not component_ids or not self.criteria:
             return
         # 일괄 조회 지원 어댑터의 요청 단위 성분 스냅샷
         catalog = get_catalog()
@@ -115,6 +115,14 @@ def evaluate(profile, component_id, modifications=None, *, criteria=None, contex
     if modifications is not None:
         identifiers(modifications)
     context = context if context is not None else EvaluationContext(profile, criteria)
+    if not context.criteria:
+        # No dietary restrictions means no condition can conflict, regardless of
+        # evidence completeness. This does not assert ingredients or store safety.
+        return {'component_id': component_id, 'status': 'match', 'reasons': [],
+                'guidance': judgement_guidance('match', [], False),
+                'problem_ingredients': [], 'unknown_items': [], 'unknown_messages': [],
+                'ai_evidence': [], 'sources': [], 'preference_score': 0,
+                'sort_key': [PRIORITY['match'], 0, component_id]}
     if modifications is None and component_id in context.cached_judgements:
         return deepcopy(context.cached_judgements[component_id])
     criteria = context.criteria

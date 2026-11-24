@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { useProfileStore } from "@/store/profileStore";
 import { makeQueryClient } from "@/lib/api/queryClient";
+import { isPersonalizedQuery } from "@/lib/api/keys";
 import { profileSignature } from "@/lib/api/homeMenus";
 import { useDiscoveryFilters } from "@/hooks/useDiscovery";
 
@@ -16,7 +17,7 @@ export function ProfileCacheSync() {
     if (previous.current === signature) return;
     previous.current = signature;
     useDiscoveryFilters.getState().setHomePage(1, "");
-    void client.invalidateQueries({ predicate: (query) => ["menus", "menu", "restaurants", "restaurant", "judgement"].includes(String(query.queryKey[1])) });
+    void client.invalidateQueries({ predicate: isPersonalizedQuery });
   }, [client, signature]);
   return null;
 }

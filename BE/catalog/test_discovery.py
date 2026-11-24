@@ -58,13 +58,16 @@ class DiscoveryTests(TestCase):
         self.assertEqual(self.query(category='한식', match_only='true', page='2', limit='1')['results'], [])
         self.assertEqual(self.query(category='한식', max_price='6000', match_only='true')['pagination']['total'], 0)
 
-    def test_unconfigured_not_match_and_unknown_coordinates_excluded(self):
+    def test_unconfigured_matches_all_menus_and_unknown_coordinates_excluded(self):
         params = dict(personalize='true', lat='36', lng='127', radius_km='3')
         result = discover_restaurants(params, DatabaseCatalogRepository(), self.empty_profile)
         self.assertEqual({r['restaurant_id'] for r in result['results']}, {'near', 'far', 'empty'})
-        self.assertTrue(all(not r['personalization']['applied'] for r in result['results']))
-        self.assertTrue(all(r['dietary_summary']['match_menu_count'] == 0 for r in result['results']))
-        self.assertEqual(discover_restaurants(dict(params, match_only='true'), DatabaseCatalogRepository(), self.empty_profile)['results'], [])
+        self.assertTrue(all(r['personalization']['applied'] and not r['personalization']['profile_configured'] for r in result['results']))
+        counts = {r['restaurant_id']: r['dietary_summary']['match_menu_count'] for r in result['results']}
+        self.assertEqual(counts, {'near': 2, 'far': 1, 'empty': 0})
+        self.assertTrue(all(r['dietary_summary']['check_menu_count'] == 0 for r in result['results']))
+        matched = discover_restaurants(dict(params, match_only='true'), DatabaseCatalogRepository(), self.empty_profile)
+        self.assertEqual({r['restaurant_id'] for r in matched['results']}, {'near', 'far'})
 
     def test_bounds_inclusive_and_distance_origin_independent(self):
         result = discover_restaurants(dict(bounds='127,36,127.1,36.01', lat='35', lng='127'), DatabaseCatalogRepository())
@@ -86,7 +89,8 @@ class DiscoveryTests(TestCase):
     def test_real_engine_and_sessions_via_http(self):
         response = self.client.get('/api/restaurants', {'personalize': 'true', 'bounds': '126.9,35.9,127.1,36.1'})
         self.assertEqual(response.status_code, 200)
-        self.assertFalse(response.json()['results'][0]['personalization']['applied'])
+        self.assertTrue(response.json()['results'][0]['personalization']['applied'])
+        self.assertFalse(response.json()['results'][0]['personalization']['profile_configured'])
         self.client.put('/api/profile', data='{"criteria":["allergen-milk"]}', content_type='application/json')
         response = self.client.get('/api/restaurants', {'personalize': 'true', 'bounds': '126.9,35.9,127.1,36.1'})
         self.assertTrue(response.json()['results'][0]['personalization']['applied'])
@@ -94,7 +98,9 @@ class DiscoveryTests(TestCase):
         self.assertTrue(all(r['dietary_summary']['match_menu_count'] == 0 for r in response.json()['results']))
         from django.test import Client
         other = Client().get('/api/restaurants', {'personalize': 'true', 'match_only': 'true'})
-        self.assertEqual(other.json()['results'], [])
+        self.assertEqual(other.json()['pagination']['total'], 3)
+        self.assertTrue(all(not r['personalization']['profile_configured'] for r in other.json()['results']))
+        self.assertTrue(all(r['dietary_summary']['match_menu_count'] > 0 for r in other.json()['results']))
         self.assertEqual(self.client.get('/api/restaurants', {'bounds': 'bad'}).status_code, 400)
 
     def test_candidate_queries_constant_as_menu_count_grows(self):
