@@ -1,69 +1,98 @@
-# 골라잇 (GollaEat) — FE (React + Vite)
+# 프론트엔드
 
-알레르기·채식·개인 식이 제한이 있는 사용자가 **메뉴 단위**로 먹을 수 있는지 판단받는 모바일 웹앱입니다.  
-모노레포에서는 [`Seon-K/GollaEat`](https://github.com/Seon-K/GollaEat)의 `FE/` 디렉터리에 해당합니다.
+[GollaEat](../README.md) · [실행·배포 가이드](../docs/development.md)
 
-스택: **React + TypeScript + Vite + React Router** + Tailwind CSS.
+식이 프로필 설정부터 목록·지도 탐색, 메뉴 확인, AI 대화까지 제공하는 모바일 웹입니다. 관리자 화면도 같은 React 앱에서 별도 경로로 제공합니다.
 
-홈 / 지도 / 마이 탭과 위치 기반 식당 탐색의 API·환경 설정은
-[지도 탐색 문서](docs/map-discovery.md)를 참고하세요.
-린트는 React Hooks·TypeScript용 ESLint flat config를 사용합니다.
+## 기술 스택
 
-## 실행 방법
+| 기술 | 역할 |
+| --- | --- |
+| React 19 · TypeScript | 컴포넌트와 화면·API 타입 정의 |
+| Vite 7 | 개발 서버, API 프록시, 프로덕션 빌드 |
+| React Router 7 | 페이지 라우팅과 화면별 지연 로딩 |
+| Tailwind CSS 4 · Lucide React | 스타일·디자인 토큰과 아이콘 |
+| TanStack Query 5 | 서버 데이터 조회·캐시·무효화 |
+| Zustand 5 | 식이 프로필, 탐색 필터 등 클라이언트 상태 |
+| Kakao Maps JavaScript SDK | 지도, 식당 마커, 영역 기반 탐색 |
+| Vitest · Testing Library · ESLint | 화면·로직 테스트와 정적 검사 |
 
-```bash
-cp .env.example .env.local
-npm install
+세부 의존성 버전은 [package.json](package.json)을 기준으로 합니다.
+
+## 구현 파이프라인
+
+```mermaid
+flowchart TD
+    A["화면 진입: React Router"] --> B["SessionGate: 세션·프로필 준비"]
+    B --> C["Zustand: 프로필·탐색 조건"]
+    C --> D["TanStack Query: 서버 상태 조회"]
+    D --> E{"DataProvider 모드"}
+    E -->|"api"| F["동일 origin /api 요청"]
+    E -->|"mock"| G["예시 데이터"]
+    F --> H["Vite proxy 또는 Caddy → Django"]
+    H --> I["응답 변환: 서버 판정·근거 유지"]
+    G --> J["목록·지도·상세·AI 화면"]
+    I --> J
+    C -.->|"프로필 변경 시 개인화 쿼리 무효화"| D
+```
+
+1. `SessionGate`가 API 세션과 프로필을 준비하고 `PhoneFrame`이 모바일 화면 틀을 제공합니다.
+2. 페이지와 훅이 필터·위치·프로필을 조회 조건으로 구성합니다. TanStack Query는 서버 상태를, Zustand는 프로필·탐색 UI 상태를 관리합니다.
+3. `DataProvider`가 `api` 또는 `mock` 구현을 선택합니다. API 모드는 같은 origin의 `/api/*`를 호출하고 어댑터가 응답을 UI 모델로 변환합니다.
+4. 프로필 변경 시 개인화 쿼리를 무효화하고, 세션 식별자가 바뀌면 기존 캐시를 비워 이전 사용자의 결과가 남지 않게 합니다.
+
+### 핵심 화면의 구현
+
+| 영역 | 구현 방식 |
+| --- | --- |
+| 목록·지도 | 서버 검색·필터·페이지 처리, 지도 bounds 변경 후 지연 조회, 식당별 메뉴 바텀시트 |
+| 메뉴 상세·판단 근거 | 서버 `judgement`의 상태·출처·안내를 표시. `needs_check`는 UI의 `check` 상태에 대응 |
+| 직원 안내·문의 | 프로필과 선택 메뉴에 맞춘 확인 문구 표시 |
+| AI 탐색 | 질문·장소 선택·반경 확대 요청을 챗봇 API와 연결 |
+| 관리자 | `/manage/*`에서 직원 로그인과 모델별 권한을 사용하는 관리 API 호출 |
+
+실제 API 모드의 판정은 서버 응답을 사용합니다. 브라우저는 `analysis_reference` 원자료로 판정을 생성하지 않습니다.
+
+## 코드 구조
+
+| 경로 | 담당 |
+| --- | --- |
+| [src/AppRouter.tsx](src/AppRouter.tsx) | 라우팅, 페이지 지연 로딩, 사용자·관리자 경계 |
+| [src/pages/](src/pages/) | 온보딩, 탐색, 지도, 상세, 마이, AI 화면 |
+| [src/components/](src/components/) | 세션·로딩·화면 틀과 공통 UI |
+| [src/hooks/](src/hooks/) | 위치, 탐색, 저장과 바텀시트 동작 |
+| [src/lib/api/](src/lib/api/) | API 클라이언트, 제공자, 타입, 응답 변환, 쿼리 키 |
+| [src/store/](src/store/) | 프로필·저장 메뉴·리뷰 상태 |
+| [src/admin/](src/admin/) | 관리자 UI와 API |
+
+## 로컬 실행
+
+Node.js 22 기준이며 저장소 루트에서 시작합니다.
+
+```powershell
+cd FE
+npm ci
+Copy-Item .env.example .env.local
 npm run dev
 ```
 
-- 로컬: Vite가 `/api`를 `VITE_API_PROXY_TARGET`(기본 `http://127.0.0.1:8000`)으로 프록시
-- Mock UI: `VITE_DATA_MODE=mock`
-- 지도: `VITE_KAKAO_MAP_APP_KEY`(카카오맵 JS 키). Railway Variables에도 동일 키 등록, 카카오 콘솔에 배포 도메인 등록
-- 브라우저: [http://localhost:5173](http://localhost:5173)
+`.env.local`이 있으면 복사를 생략합니다. 접속 주소는 [localhost:5173](http://localhost:5173)입니다.
 
-```bash
+| 환경변수 | 의미 |
+| --- | --- |
+| `VITE_DATA_MODE` | `api` 기본값, `mock`은 UI 확인용 예시 데이터 |
+| `VITE_API_PROXY_TARGET` | 로컬 API 프록시 대상. 기본 `http://127.0.0.1:8000` |
+| `VITE_KAKAO_MAP_APP_KEY` | 카카오맵 JavaScript 키. 사용할 도메인 등록 필요 |
+| `BACKEND_ORIGIN` | 배포 Caddy의 백엔드 주소. 브라우저 빌드 설정과 구분 |
+
+지도 키는 빌드 시 주입됩니다. DB 접속 정보와 서버 AI 키는 FE 환경변수에 넣지 않습니다.
+
+## 검증과 상세 문서
+
+```powershell
 npm test
 npm run build
-npm run preview
+npm run lint
 ```
 
-## 배포 (Railway)
-
-- `Dockerfile` + `Caddyfile` + `railway.json`
-- Frontend Variables: `BACKEND_ORIGIN=https://${{Backend.RAILWAY_PUBLIC_DOMAIN}}` (경로·trailing `/` 없음), `VITE_KAKAO_MAP_APP_KEY=` (카카오맵 JS 키, 빌드 시 주입)
-- Caddy가 `/api`·`/admin`·`/static`을 백엔드로 전달하고 SPA는 `dist` 서빙
-- Health: `/healthz`
-
-## 라우트 맵
-
-| 경로 | 화면 |
-|------|------|
-| `/` | 스플래시 |
-| `/onboarding` | 온보딩 |
-| `/setup/allergen` | 알레르겐 |
-| `/setup/restriction` | 제한 재료 |
-| `/setup/confirm` | 프로필 확인·저장 |
-| `/explore` | 메뉴 탐색 |
-| `/menu/:id` | 메뉴 상세 |
-| `/menu/:id/reasoning` | 판단 근거 |
-| `/menu/:id/inquiry` | 매장 문의 |
-| `/menu/:id/report` | 정보 제보 |
-| `/show-staff` | 직원에게 보여주기 |
-| `/my` | 마이페이지 |
-| `/ai` | AI 메뉴 추천 |
-
-호환 redirect: `/profile`, `/mypage`, `/staff`, `/menus/:id` …
-# 관리자 페이지
-
-- `/manage/login`: 기존 Django 직원 계정의 이메일과 비밀번호로 로그인합니다. 이메일은 대소문자를 구분하지 않으며 중복 이메일 계정은 로그인을 거부합니다. 활성 계정과 모델별 권한이 필요합니다.
-- `/manage`: 권한 범위 내 데이터 건수와 미처리 제보 현황을 표시합니다.
-- `/manage/criteria`, `/manage/rules`: 기준 정보 등록·수정·비활성화와 판단 규칙 등록·수정을 제공합니다.
-- 새 기준은 비활성으로 등록하고, 판단 규칙에 제외 성분 태그와 근거를 연결한 뒤 활성화합니다.
-- `/manage/restaurants`, `/manage/menus`: 기존 DB 항목의 기본 정보를 수정합니다. 신규 등록, 영업시간, 옵션·성분 근거 편집은 기존 Django `/admin/`을 사용합니다.
-- `/manage/reports`: 전체 제보 조회, 검토 시작, 반려, 수정 제안 반영, 수동 반영 완료를 제공합니다. 재료·알레르겐 제보는 자동 반영하지 않습니다.
-- `/manage/reviews`: 리뷰 조회와 영구 삭제를 제공합니다. 숨김·복원은 아직 제공하지 않습니다.
-- 관리 API는 동일 origin의 `/api/manage/*`를 사용하고 Django 세션·CSRF·모델 권한을 검사합니다.
-- 사용자 화면에 DB 수정값을 반영하려면 백엔드의 `CATALOG_USE_DB=true`와 데이터 적재가 필요합니다.
-- 매장·메뉴·기준·규칙 수정과 리뷰 삭제는 Django 관리자 로그에, 제보 처리는 기존 `ReportEvent`에 기록합니다.
-- 관리자 계정 생성은 저장소 루트에서 `.\BE\.venv\Scripts\python.exe BE/manage.py createsuperuser`로 진행합니다.
+[지도·탐색 구현](docs/map-discovery.md) · [API 계약](docs/api-spec.md) · [배포 설정](../docs/development.md)
