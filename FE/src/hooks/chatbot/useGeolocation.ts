@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { locate, LocationError } from "@/hooks/useGeolocation";
 import { ASAN_ORIGIN } from "@/data/mock";
 
-export type GeoStatus = "pending" | "ready" | "denied" | "unavailable";
+export type GeoStatus = "idle" | "pending" | "ready" | "denied" | "unavailable";
 
 export interface UserLocation {
   lat: number;
@@ -31,7 +31,7 @@ const FALLBACK: UserLocation = {
  */
 export function useGeolocation(): UseGeolocationResult {
   const [location, setLocation] = useState<UserLocation>(FALLBACK);
-  const [status, setStatus] = useState<GeoStatus>("pending");
+  const [status, setStatus] = useState<GeoStatus>("idle");
   const generation = useRef(0);
 
   const refresh = useCallback(async () => {
@@ -55,8 +55,17 @@ export function useGeolocation(): UseGeolocationResult {
   }, []);
 
   useEffect(() => {
-    void refresh().catch(() => undefined);
-    return () => { generation.current += 1; };
+    let active = true;
+    // Only reuse an existing grant automatically. The user requests new access
+    // from the dialog button, so the native prompt has an explicit user gesture.
+    if (navigator.permissions?.query) {
+      void navigator.permissions.query({ name: 'geolocation' }).then(permission => {
+        if (!active) return;
+        if (permission.state === 'granted') void refresh().catch(() => undefined);
+        else setStatus(permission.state === 'denied' ? 'denied' : 'idle');
+      }).catch(() => undefined);
+    }
+    return () => { active = false; generation.current += 1; };
   }, [refresh]);
 
   return { location, status, refresh };

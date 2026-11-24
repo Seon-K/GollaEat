@@ -19,12 +19,12 @@ afterEach(() => {
   postChat.mockReset();
 });
 
-async function openLocationPrompt(allowRetry: boolean) {
+async function openLocationPrompt(allowRetry: boolean, permission?: PermissionState) {
   vi.stubGlobal("navigator", {
+    ...(permission ? { permissions: { query: vi.fn().mockResolvedValue({ state: permission }) } } : {}),
     geolocation: {
       getCurrentPosition: vi.fn<Geolocation["getCurrentPosition"]>()
-        .mockImplementationOnce((_success, fail) => fail?.({ code: 1 } as GeolocationPositionError))
-        .mockImplementationOnce((success, fail) => {
+        .mockImplementation((success, fail) => {
           if (allowRetry) success({ coords: { latitude: 36.77, longitude: 126.93 } } as GeolocationPosition);
           else fail?.({ code: 1 } as GeolocationPositionError);
         }),
@@ -43,13 +43,22 @@ async function openLocationPrompt(allowRetry: boolean) {
 }
 
 describe("chat location permission", () => {
+  it('reuses an existing grant without showing a permission dialog', async () => {
+    postChat.mockResolvedValue({ message: '검색 결과', placeCandidates: [], matched: [], needsCheck: [], state: {} });
+    const dialog = await openLocationPrompt(true, 'granted');
+    await waitFor(() => expect(navigator.geolocation.getCurrentPosition).toHaveBeenCalledTimes(1));
+    fireEvent.click(await screen.findByRole('button', { name: CURRENT_LOCATION_QUESTION }));
+    await waitFor(() => expect(postChat).toHaveBeenCalledWith({ message: '', location: { lat: 36.77, lng: 126.93 } }));
+    expect(dialog.open).toBe(false);
+  });
   it("requests location again and searches using the granted coordinates", async () => {
     postChat.mockResolvedValue({ message: "검색 결과", placeCandidates: [], matched: [], needsCheck: [], state: {} });
-    const dialog = await openLocationPrompt(true);
+    const dialog = await openLocationPrompt(true, 'prompt');
     const question = await screen.findByRole("button", { name: CURRENT_LOCATION_QUESTION });
     fireEvent.click(question);
     expect(dialog.open).toBe(true);
     expect(postChat).not.toHaveBeenCalled();
+    expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "위치 권한 요청" }));
     await waitFor(() => expect(postChat).toHaveBeenCalledWith({ message: "", location: { lat: 36.77, lng: 126.93 } }));
     expect(dialog.open).toBe(false);
@@ -63,5 +72,11 @@ describe("chat location permission", () => {
     fireEvent.click(screen.getByRole("button", { name: "위치 권한 요청" }));
     await screen.findByText(/위치 권한이 꺼져 있어요/);
     expect(postChat).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: '위치 권한 요청' })).toBeTruthy();
+    vi.mocked(navigator.geolocation.getCurrentPosition).mockImplementationOnce(success => success({ coords: { latitude: 36.77, longitude: 126.93 } } as GeolocationPosition));
+    postChat.mockResolvedValue({ message: '검색 결과', placeCandidates: [], matched: [], needsCheck: [], state: {} });
+    fireEvent.click(screen.getByRole('button', { name: '위치 권한 요청' }));
+    await waitFor(() => expect(postChat).toHaveBeenCalledWith({ message: '', location: { lat: 36.77, lng: 126.93 } }));
+    expect(dialog.open).toBe(false);
   });
 });
