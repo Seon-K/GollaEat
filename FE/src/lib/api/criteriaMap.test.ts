@@ -5,7 +5,7 @@ import { createElement as h } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
-import snapshot from "../../../docs/api-samples/get_dietary_criteria.json";
+import snapshot from "./__fixtures__/get_dietary_criteria.json";
 import { ALLERGENS, allergenLabel, normalizeAllergenIds } from "@/data/allergens";
 import { profileToCriteriaCodes, criteriaCodesToProfile } from "./criteriaMap";
 import { useProfileStore } from "@/store/profileStore";
