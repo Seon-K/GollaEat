@@ -275,3 +275,19 @@ including category names. The retired UI-only `animal_broth` option is removed f
 selection, local types, demo defaults and mock reasoning. Browser hydration drops
 that unsupported ID while retaining supported selections; it is not replaced by a
 broader condition. All 12 displayed restrictions round-trip through the API mapping.
+
+## My information reports and sharing
+
+My Page has a reports tab backed by the existing owner-scoped `GET /api/reports`
+endpoint. It shows category, submitted content, creation/review dates and processing
+status, with 20-item pagination and a menu-detail link when a menu ID is present.
+The backend returns compact pagination (`page`, `limit`, `total`); the provider derives
+page counts and navigation. Report submission invalidates the report-list cache.
+Session identity changes already clear the shared query cache via SessionGate.
+The current backend only supports GET on report details: edit/delete controls are
+not exposed. No backend changes or database migrations are required.
+
+Social metadata uses a short title and description and a 1200×630 PNG containing the
+existing background logo with padding. Original logo files are preserved. The new
+`/logo/share-logo.png` URL replaces the former square OG image; deployed social
+previews may still need their crawler cache refreshed.

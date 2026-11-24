@@ -1,6 +1,6 @@
 import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, CheckCircle2 } from "lucide-react";
 import { ApiErrorPanel, ApiLoading } from "@/components/ApiState";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -19,6 +19,7 @@ const REPORT_TYPES: { id: ReportCategory; label: string }[] = [
 export default function MenuReportPage({ mode = "error" }: { mode?: "error" | "contribution" }) {
   const { id = "" } = useParams();
   const navigate = useNavigate();
+  const client = useQueryClient();
   const [searchParams] = useSearchParams();
   const contribution = mode === "contribution";
   const title = contribution ? "정보 제보" : "정보 오류";
@@ -31,7 +32,10 @@ export default function MenuReportPage({ mode = "error" }: { mode?: "error" | "c
   const submit = async () => {
     if (submitting.current || report.isSuccess || !content.trim() || content.trim().length > 5000 || !menu.data) return;
     submitting.current = true;
-    try { await report.mutateAsync(); } catch { /* Keep input for retry. */ }
+    try {
+      await report.mutateAsync();
+      void client.invalidateQueries({ queryKey: [...apiKeys.all, "reports"] });
+    } catch { /* Keep input for retry. */ }
     finally { submitting.current = false; }
   };
   if (menu.isPending && !menu.isError) return <main className="min-h-[100dvh] bg-background px-5 pt-6"><ApiLoading variant="detail" /></main>;
