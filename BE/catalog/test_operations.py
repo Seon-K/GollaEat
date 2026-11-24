@@ -64,13 +64,18 @@ class CatalogOperationsTests(TestCase):
         self.assertEqual(operating_status(self.restaurant, moment), 'unknown')
 
     def test_overnight_and_hours_validation(self):
+        moment = datetime(2026, 11, 24, 1, tzinfo=ZoneInfo('Asia/Seoul'))
+        # Keep evidence valid at the fixed scenario time, independent of today's date.
+        self.source.checked_at = moment - timedelta(days=1)
+        self.source.valid_until = moment + timedelta(days=365)
+        self.source.save()
         self.hours()
         monday = self.restaurant.business_hours.get(weekday=0)
         monday.opens_at, monday.closes_at, monday.closes_next_day = time(22), time(2), True
         monday.break_start, monday.break_end = time(0), time(0, 30)
         monday.full_clean()
         monday.save()
-        self.assertEqual(operating_status(self.restaurant, datetime(2026, 11, 24, 1, tzinfo=ZoneInfo('Asia/Seoul'))), 'open')
+        self.assertEqual(operating_status(self.restaurant, moment), 'open')
         monday.break_end = time(12)
         with self.assertRaises(ValidationError):
             monday.full_clean()
