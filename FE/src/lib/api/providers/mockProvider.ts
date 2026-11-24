@@ -23,6 +23,7 @@ import type {
   ApiFavorite,
   ApiProfile,
   ApiReview,
+  ApiReport,
   ApiSession,
 } from "@/lib/api/types";
 import type { DietProfile, JudgementStatus } from "@/types";
@@ -34,6 +35,7 @@ let favSeq = 1;
 const mockReviews: ApiReview[] = [];
 let reviewSeq = 1;
 let reportSeq = 1;
+const mockReports: ApiReport[] = [];
 
 function profileFromCriteria(codes: string[]): DietProfile {
   return criteriaCodesToProfile(codes);
@@ -251,7 +253,17 @@ export const mockProvider: DataProvider = {
   },
 
   async createReport(input) {
-    return { ...input, menu_id: input.menu_id ?? null, report_id: reportSeq++, restaurant_id: input.restaurant_id ?? null, status: "pending", created_at: new Date().toISOString(), reviewed_at: null };
+    const report: ApiReport = { ...input, menu_id: input.menu_id ?? null, report_id: reportSeq++, restaurant_id: input.restaurant_id ?? null, status: "pending", created_at: new Date().toISOString(), reviewed_at: null };
+    mockReports.unshift(report);
+    return report;
+  },
+  async getMyReports(page = 1) {
+    const limit = 20;
+    const total = mockReports.length;
+    const totalPages = Math.ceil(total / limit);
+    const items = mockReports.slice((page - 1) * limit, page * limit);
+    return { items, pagination: { page, limit, total, count: items.length, totalPages,
+      nextPage: page < totalPages ? page + 1 : null, previousPage: page > 1 ? page - 1 : null } };
   },
 
   async getReviews(menuId) {

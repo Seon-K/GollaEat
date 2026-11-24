@@ -8,6 +8,14 @@ import type { ApiRestaurant } from "./types";
 vi.mock("./client", () => ({ apiGet: vi.fn(), apiPost: vi.fn(), apiPut: vi.fn(), apiPatch: vi.fn(), apiDelete: vi.fn() }));
 
 describe("restaurant discovery API contract", () => {
+  it("maps the report endpoint's compact pagination without inventing mutation support", async () => {
+    vi.mocked(apiGet).mockResolvedValue({ results: [{ report_id: 21, category: "business", content: "변경된 시간", status: "pending" }],
+      pagination: { page: 2, limit: 20, total: 41 } });
+    const result = await apiProvider.getMyReports(2);
+    expect(apiGet).toHaveBeenLastCalledWith("/api/reports", { page: 2, limit: 20 }, undefined);
+    expect(result.items[0].report_id).toBe(21);
+    expect(result.pagination).toEqual({ page: 2, limit: 20, total: 41, count: 1, totalPages: 3, nextPage: 3, previousPage: 1 });
+  });
   it("preserves the server official-list guidance and store confirmation notice", () => {
     const guidance = { label: "공식 알레르겐 표시 기준 일치", message: "공식 목록에 선택한 제한 성분이 기재되어 있지 않습니다.", notice: "주문 전 매장에 한 번 더 확인해 주세요.", basis: "official_allergen_list" };
     const result = adaptJudgement({ component_id: "menu", status: "match", reasons: [], problem_ingredients: [], unknown_items: [], sources: [], preference_score: 0, sort_key: [], guidance });
