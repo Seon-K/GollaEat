@@ -24,7 +24,7 @@ function ShowStaffContent() {
   const restrictionText = joinWithDot(restrictionLabels);
 
   return (
-    <main className="flex min-h-[100dvh] flex-col bg-primary-dark px-5 pb-8 pt-4 text-white">
+    <main className="staff-view flex min-h-[100dvh] flex-col bg-primary-dark px-5 pb-8 pt-4 text-white">
       <header className="flex h-12 items-center justify-between">
         <p className="text-[15px] font-medium text-white">직원에게 보여주세요</p>
         <button
@@ -88,7 +88,7 @@ function ShowStaffContent() {
         className="mt-8 flex min-h-12 items-center justify-center rounded-full bg-white px-4 py-3 text-sm font-semibold text-primary-dark">
         {menuId ? "매장에서 확인한 정보 제보하기" : "제보할 메뉴 선택하기"}
       </Link>
-      <p className="text-center text-[12px] text-white/50 safe-bottom">
+      <p className="mt-6 text-center text-[12px] text-white/50 safe-bottom">
         닫으면 이전 메뉴 화면으로 돌아갑니다.
       </p>
     </main>
