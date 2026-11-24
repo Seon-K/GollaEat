@@ -11,6 +11,7 @@ import MenuDetailPage from "@/pages/MenuDetailPage";
 import SplashPage from "@/pages/SplashPage";
 import { SessionGate } from "@/components/SessionGate";
 import { useProfileStore } from "@/store/profileStore";
+import { apiKeys } from "@/lib/api/keys";
 
 const mocks = vi.hoisted(() => ({
   ensureSession: vi.fn(),
@@ -23,7 +24,7 @@ vi.mock("@/lib/api/client", () => ({ ensureSession: mocks.ensureSession, getBoot
 vi.mock("@/hooks/useFavoriteToggle", () => ({ useFavorites: () => ({ isSaved: () => false, isSaving: () => false, toggling: false, toggleSave: vi.fn() }) }));
 vi.mock("@/components/NearbyMap", () => ({ NearbyMap: () => null }));
 vi.mock("@/components/StoreMap", () => ({ StoreMap: () => null }));
-vi.mock("@/hooks/useGeolocation", () => ({ useGeolocation: () => mocks.geo }));
+vi.mock("@/hooks/useGeolocation", () => ({ useGeolocation: () => mocks.geo, getCachedLocation: () => mocks.geo.position }));
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -198,6 +199,17 @@ describe("detail request lifecycle", () => {
 });
 
 describe("safe introduction loading", () => {
+  it("prefetches only after server profile hydration and reuses the home cache", async () => {
+    const pending = deferred<{ criteria: string[]; setup_completed: boolean }>();
+    mocks.provider.getProfile.mockReturnValue(pending.promise);
+    const view = mount(h(SplashPage), '/', true);
+    expect(mocks.provider.getRestaurants).not.toHaveBeenCalled();
+    await act(async () => pending.resolve({ criteria: [], setup_completed: true }));
+    await waitFor(() => expect(mocks.provider.getRestaurants).toHaveBeenCalledTimes(1));
+    const request = mocks.provider.getRestaurants.mock.calls[0][0];
+    expect(request).toMatchObject({ view: 'card', limit: 10, page: 1, personalize: true });
+    expect(view.client.getQueryData(apiKeys.restaurants({ ...request, profile: JSON.stringify([[], []]), view: 'home-page' }))).toBeTruthy();
+  });
   it("renders the introduction immediately but blocks navigation until hydration; strict mode deduplicates profile", async () => {
     const profile = deferred<{ criteria: string[]; setup_completed: boolean }>();
     mocks.provider.getProfile.mockReturnValue(profile.promise);
@@ -206,6 +218,7 @@ describe("safe introduction loading", () => {
     await waitFor(() => expect(mocks.provider.getProfile).toHaveBeenCalledTimes(1));
     await act(async () => profile.resolve({ criteria: [], setup_completed: false }));
     await waitFor(() => expect(screen.getByRole("button", { name: "시작하기" }).hasAttribute("disabled")).toBe(false));
+    expect(mocks.provider.getRestaurants).not.toHaveBeenCalled();
   });
 
   it("keeps identical restaurant placeholders before and after session hydration", async () => {
