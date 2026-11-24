@@ -5,7 +5,7 @@ from .map_links import kakao_links
 
 
 ALLOWED_PARAMETERS = {'q', 'min_price', 'max_price', 'category', 'sort', 'page', 'limit',
-    'lat', 'lng', 'radius_km', 'region', 'open_now', 'restaurant_id', 'judgement_status'}
+    'lat', 'lng', 'radius_km', 'region', 'open_now', 'restaurant_id', 'judgement_status', 'menu_query'}
 SORT_OPTIONS = {'menu_name_asc', 'price_asc', 'price_desc', 'distance_asc', 'dietary'}
 RESTAURANT_PARAMETERS = {'q', 'brand', 'page', 'limit', 'lat', 'lng', 'radius_km', 'sort',
     'restaurant_type', 'category', 'region', 'open_now', 'min_price', 'max_price'}
@@ -146,6 +146,7 @@ def list_menus(params, repository=None, *, profile=None):
         raise MenuQueryError(unknown[0], f'unknown parameter: {unknown[0]}')
 
     query = _text_parameter(params, 'q', 100)
+    menu_query = _text_parameter(params, 'menu_query', 100).casefold()
     restaurant_id = _text_parameter(params, 'restaurant_id', 100)
     judgement_status = judgement_status_parameter(params)
     categories = _menu_categories(params)
@@ -171,7 +172,7 @@ def list_menus(params, repository=None, *, profile=None):
         if indexed is not None:
             return indexed
     initial_page = callable(getattr(type(repository), 'initial_menu_page', None))
-    if initial_page and not judgement_status and not restaurant_id and not query and not categories and not region and open_now is None and radius is None and sort in {
+    if initial_page and not menu_query and not judgement_status and not restaurant_id and not query and not categories and not region and open_now is None and radius is None and sort in {
             'menu_name_asc', 'price_asc', 'price_desc'}:
         result = repository.initial_menu_page(sort=sort, page=page, limit=limit,
             min_price=min_price if 'min_price' in params else None,
@@ -245,7 +246,7 @@ def list_menus(params, repository=None, *, profile=None):
         context.flush()
         if judgement_status:
             menus = [m for m in menus if judgements[m['menu_id']]['status'] == judgement_status]
-    db_page = repository.ordered_menu_page(menus, sort, page, limit) if compact else None
+    db_page = repository.ordered_menu_page(menus, sort, page, limit) if compact and not menu_query else None
     if db_page is not None:
         pass
     elif sort == 'dietary':
@@ -259,6 +260,11 @@ def list_menus(params, repository=None, *, profile=None):
     else:
         menus.sort(key=lambda menu: (menu['menu_name'].casefold(), menu['menu_id']))
 
+    if menu_query:
+        # Stable sort: retain the selected ordering inside each relevance group.
+        # Rank the entire filtered set, never just the requested page.
+        menus.sort(key=lambda menu: 0 if menu['menu_name'].casefold() == menu_query
+                   else 1 if menu_query in menu['menu_name'].casefold() else 2)
     total = len(menus)
     start = (page - 1) * limit
     selected = db_page if db_page is not None else menus[start:start + limit]

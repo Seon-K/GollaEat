@@ -23,6 +23,7 @@ export function RestaurantMenuList({ restaurant, filters, origin, showDistance =
   const client = useQueryClient();
   const fav = useFavorites();
   const params = { ...filterParams(filters, ""), region: "아산시", restaurant_id: restaurant.id, personalize: true,
+    menu_query: filters.query.trim() || undefined,
     sort: filters.sort === "distance_asc" ? "dietary" : filters.sort, lat: origin.lat, lng: origin.lng, limit: 20 };
   const menus = useInfiniteQuery({
     queryKey: apiKeys.menus({ ...params, profile: profileSignature(allergens, restrictions), view: "restaurant-menus" }),

@@ -1,29 +1,36 @@
-import { Link, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   MapPin,
   Send,
+  Utensils,
 } from "lucide-react";
+import { BottomSheet } from "@/components/BottomSheet";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Chip } from "@/components/Chip";
 import { Disclaimer } from "@/components/Disclaimer";
+import { MenuCard } from "@/components/MenuCard";
 import { Mascot } from "@/components/Mascot";
 import { Toast } from "@/components/Toast";
 import { allergenLabel } from "@/data/allergens";
 import { restrictionLabel } from "@/data/restrictions";
 import { SCH_ORIGIN } from "@/data/mock";
 import { useGeolocation } from "@/hooks/chatbot/useGeolocation";
+import { LocationError } from "@/hooks/useGeolocation";
+import { useFavorites } from "@/hooks/useFavoriteToggle";
 import type {
   ChatMenuHitUi,
   ChatPlaceCandidateUi,
   ChatResultUi,
 } from "@/lib/api/adapters";
+import { apiGet } from "@/lib/api/client";
+import type { ApiMenusResponse } from "@/lib/api/types";
 import { ApiError } from "@/lib/api/errors";
-import { getDataProvider } from "@/lib/api/providers";
+import { getDataMode, getDataProvider } from "@/lib/api/providers";
 import { CURRENT_LOCATION_QUESTION, SUGGESTED_QUESTIONS } from "@/lib/aiEngine";
 import { navigateBack } from "@/lib/navBack";
 import { useProfileStore } from "@/store/profileStore";
@@ -50,55 +57,136 @@ function formatDistanceM(m: number | null): string {
   return `${(m / 1000).toFixed(1)}km · 직선거리`;
 }
 
-function HitCard({
-  hit,
-  tone,
+async function getRestaurantMenuPrices(restaurantId: string, signal: AbortSignal) {
+  const prices = new Map<string, number>();
+  let page: number | null = 1;
+  while (page !== null) {
+    const response: ApiMenusResponse = await apiGet<ApiMenusResponse>("/api/menus", {
+      restaurant_id: restaurantId,
+      personalize: false,
+      limit: 100,
+      page,
+    }, { signal });
+    for (const menu of response.results) {
+      const amount = menu.price?.amount;
+      if (typeof amount === "number" && Number.isFinite(amount) && amount >= 0) {
+        prices.set(menu.menu_id, amount);
+      }
+    }
+    page = response.pagination.next_page;
+  }
+  return prices;
+}
+
+function ChatRestaurantMenus({
+  matched,
+  needsCheck,
+  prices,
 }: {
-  hit: ChatMenuHitUi;
-  tone: "match" | "check";
+  matched: ChatMenuHitUi[];
+  needsCheck: ChatMenuHitUi[];
+  prices?: Map<string, number>;
 }) {
-  const navigate = useNavigate();
-  const distance = formatDistanceM(hit.distanceM);
+  const favorites = useFavorites();
+
+  function renderMenu(hit: ChatMenuHitUi, status: "match" | "check") {
+    const priceAmount = prices?.get(hit.menuId) ?? null;
+    const note = hit.reason === "확인된 정보상 식이 조건 일치" ? undefined : hit.reason;
+    return (
+      <MenuCard
+        key={`${status}-${hit.menuId || hit.menuName}`}
+        variant="chat"
+        item={{
+          id: hit.menuId,
+          name: hit.menuName,
+          restaurantName: hit.restaurantName,
+          priceAmount,
+          distanceKm: null,
+          status,
+          saved: favorites.isSaved(hit.menuId),
+        }}
+        note={note}
+        saving={favorites.isSaving(hit.menuId)}
+        onToggleSave={hit.menuId && !favorites.isLoading && !favorites.isError
+          ? () => favorites.toggleSave(hit.menuId, priceAmount === null ? undefined : {
+            id: hit.menuId,
+            name: hit.menuName,
+            restaurantName: hit.restaurantName,
+            priceAmount,
+          })
+          : undefined}
+      />
+    );
+  }
+
   return (
-    <div className="rounded-2xl border border-[#eef1ef] bg-card p-4">
-      <p className="text-[15px] font-bold text-text">{hit.restaurantName}</p>
-      {distance ? (
-        <p className="mt-0.5 text-[12px] text-muted">{distance}</p>
-      ) : null}
-      <div className="mt-3">
-        <Chip label={hit.menuName} variant="readonly" />
-      </div>
-      {hit.reason ? (
-        <p
-          className={`mt-3 text-[13px] leading-relaxed ${
-            tone === "check"
-              ? "font-semibold text-accent-text"
-              : "text-muted"
-          }`}
-        >
-          {hit.reason}
-        </p>
-      ) : null}
-      {hit.menuId && tone === "match" ? (
-        <Link
-          to={`/menu/${hit.menuId}`}
-          className="mt-3 inline-flex touch-target items-center gap-0.5 text-[13px] font-semibold text-primary"
-        >
-          메뉴 상세 보기
-          <ChevronRight className="size-4" />
-        </Link>
-      ) : null}
-      {hit.menuId && tone === "check" ? (
-        <button
-          type="button"
-          onClick={() => navigate(`/show-staff?menuId=${hit.menuId}`)}
-          className="mt-3 flex h-11 w-full touch-target items-center justify-center rounded-full bg-primary-light text-[13px] font-semibold text-primary"
-        >
-          직원에게 보여주기
-        </button>
-      ) : null}
+    <div className="space-y-3">
+      {matched.map((hit) => renderMenu(hit, "match"))}
+      {needsCheck.map((hit) => renderMenu(hit, "check"))}
+      <Toast message={favorites.saveError ?? ""} visible={!!favorites.saveError} />
     </div>
   );
+}
+
+function ChatRestaurants({ result }: { result: ChatResultUi }) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const restaurants = useMemo(() => {
+    const groups = new Map<string, {
+      id: string; name: string; distance: number | null;
+      matched: ChatMenuHitUi[]; needsCheck: ChatMenuHitUi[];
+    }>();
+    for (const kind of ["matched", "needsCheck"] as const) {
+      for (const hit of result[kind]) {
+        const id = hit.restaurantId || `${hit.restaurantName}:${hit.distanceM}`;
+        let group = groups.get(id);
+        if (!group) {
+          group = { id, name: hit.restaurantName, distance: hit.distanceM, matched: [], needsCheck: [] };
+          groups.set(id, group);
+        }
+        group[kind].push(hit);
+      }
+    }
+    return [...groups.values()].sort((a, b) =>
+      Number(b.matched.length > 0) - Number(a.matched.length > 0)
+      || (a.distance ?? Infinity) - (b.distance ?? Infinity)
+      || a.id.localeCompare(b.id));
+  }, [result]);
+  const selected = restaurants.find((restaurant) => restaurant.id === selectedId);
+  const restaurantId = selected?.matched[0]?.restaurantId ?? selected?.needsCheck[0]?.restaurantId;
+  const { data: prices } = useQuery({
+    queryKey: ["chat-restaurant-menu-prices", restaurantId],
+    queryFn: ({ signal }) => getRestaurantMenuPrices(restaurantId!, signal),
+    enabled: getDataMode() === "api" && Boolean(restaurantId),
+  });
+  return <>
+    <div className="space-y-3">
+      {restaurants.map((restaurant) => <article key={restaurant.id}
+        className="rounded-2xl border border-border bg-card shadow-sm">
+        <button type="button" aria-label={`${restaurant.name} 메뉴 보기`} aria-haspopup="dialog"
+          onClick={() => setSelectedId(restaurant.id)}
+          className="flex w-full items-start gap-3 rounded-2xl p-4 text-left hover:bg-primary-light/40">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary-light text-primary">
+            <Utensils className="size-5" aria-hidden="true" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-base font-bold text-text">{restaurant.name}</span>
+            <span className="mt-1 block text-xs text-muted">{formatDistanceM(restaurant.distance)}</span>
+            <span className="mt-2 flex flex-wrap gap-1.5">
+              <StatusBadge status="match" title={`일치 ${restaurant.matched.length}개`} />
+              <StatusBadge status="check" title={`추가 확인 필요 ${restaurant.needsCheck.length}개`} />
+            </span>
+          </span>
+          <ChevronRight aria-hidden="true" className="mt-1 size-4 shrink-0 text-muted" />
+        </button>
+      </article>)}
+    </div>
+    <BottomSheet open={!!selected} onClose={() => setSelectedId(null)} title={selected?.name}>
+      {selected && (
+        <ChatRestaurantMenus matched={selected.matched} needsCheck={selected.needsCheck} prices={prices} />
+      )}
+    </BottomSheet>
+  </>;
+
 }
 
 export default function AiPage() {
@@ -106,6 +194,8 @@ export default function AiPage() {
   const allergens = useProfileStore((s) => s.allergens);
   const restrictions = useProfileStore((s) => s.restrictions);
   const geo = useGeolocation();
+  const locationDialog = useRef<HTMLDialogElement>(null);
+  const [locationPrompt, setLocationPrompt] = useState<"request" | "pending" | "denied" | "unavailable">("request");
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sending, setSending] = useState(false);
@@ -213,19 +303,34 @@ export default function AiPage() {
     void send(`${candidate.name} 근처`, { location: candidate.location });
   };
 
-  const sendSuggestedQuestion = (question: string) => {
-    if (question !== CURRENT_LOCATION_QUESTION) {
+  const submitQuestion = (question: string) => {
+    if (question.trim() !== CURRENT_LOCATION_QUESTION) {
       void send(question);
       return;
     }
-    if (!geo.location.isGps) {
-      setToast(geo.status === "pending"
-        ? "현재 위치를 확인 중이에요. 잠시 후 다시 눌러 주세요."
-        : "현재 위치를 사용할 수 없어요. 위치 권한을 확인하거나 장소 이름으로 검색해 주세요.");
-      return;
+    if (sending) return;
+    if (geo.location.isGps) {
+      const { lat, lng } = geo.location;
+      void send(CURRENT_LOCATION_QUESTION, { location: { lat, lng } });
+    } else if (geo.status === "pending") {
+      setToast("현재 위치를 확인 중이에요. 잠시 후 다시 눌러 주세요.");
+    } else {
+      setLocationPrompt("request");
+      locationDialog.current?.showModal();
     }
-    const { lat, lng } = geo.location;
-    void send(question, { location: { lat, lng } });
+  };
+
+  const retryLocation = async () => {
+    setLocationPrompt("pending");
+    try {
+      const { lat, lng } = await geo.refresh();
+      if (!locationDialog.current?.open) return;
+      locationDialog.current.close();
+      void send(CURRENT_LOCATION_QUESTION, { location: { lat, lng } });
+    } catch (error) {
+      if (!locationDialog.current?.open) return;
+      setLocationPrompt(error instanceof LocationError && error.status === "denied" ? "denied" : "unavailable");
+    }
   };
 
   return (
@@ -297,7 +402,7 @@ export default function AiPage() {
                     key={s}
                     type="button"
                     disabled={sending}
-                    onClick={() => sendSuggestedQuestion(s)}
+                    onClick={() => submitQuestion(s)}
                     className="flex w-full touch-target items-center justify-between rounded-2xl border border-[#eef1ef] bg-card px-4 py-3.5 text-left text-[14px] text-text disabled:opacity-50"
                   >
                     <span className="pr-2">{s}</span>
@@ -359,37 +464,7 @@ export default function AiPage() {
                   </section>
                 ) : null}
 
-                {m.result.matched.length > 0 ? (
-                  <section className="space-y-2">
-                    <div className="flex items-center gap-1.5 text-primary">
-                      <CheckCircle2 className="size-5" strokeWidth={2.25} />
-                      <h3 className="text-[15px] font-bold">식이조건 일치</h3>
-                    </div>
-                    {m.result.matched.map((hit) => (
-                      <HitCard
-                        key={`${hit.restaurantId}-${hit.menuId}-m`}
-                        hit={hit}
-                        tone="match"
-                      />
-                    ))}
-                  </section>
-                ) : null}
-
-                {m.result.needsCheck.length > 0 ? (
-                  <section className="space-y-2">
-                    <div className="flex items-center gap-1.5 text-accent-text">
-                      <AlertTriangle className="size-5" strokeWidth={2.25} />
-                      <h3 className="text-[15px] font-bold">추가 확인 필요</h3>
-                    </div>
-                    {m.result.needsCheck.map((hit) => (
-                      <HitCard
-                        key={`${hit.restaurantId}-${hit.menuId}-c`}
-                        hit={hit}
-                        tone="check"
-                      />
-                    ))}
-                  </section>
-                ) : null}
+                <ChatRestaurants result={m.result} />
               </div>
             );
           })}
@@ -418,7 +493,7 @@ export default function AiPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") void send(input);
+              if (e.key === "Enter") submitQuestion(input);
             }}
             placeholder={
               activePlaceCandidates.length > 0
@@ -432,7 +507,7 @@ export default function AiPage() {
           <button
             type="button"
             disabled={sending || !input.trim()}
-            onClick={() => void send(input)}
+            onClick={() => submitQuestion(input)}
             className="inline-flex size-12 items-center justify-center rounded-full bg-primary text-white touch-target disabled:opacity-40"
             aria-label="전송"
           >
@@ -444,6 +519,33 @@ export default function AiPage() {
         </div>
       </div>
 
+      <dialog
+        ref={locationDialog}
+        aria-labelledby="chat-location-title"
+        aria-describedby="chat-location-description"
+        onCancel={(event) => { if (locationPrompt === "pending") event.preventDefault(); }}
+        className="m-auto w-[calc(100%-2rem)] max-w-sm rounded-2xl bg-card p-5 text-text shadow-lg backdrop:bg-black/40"
+      >
+        <h2 id="chat-location-title" className="text-base font-bold">현재 위치 사용</h2>
+        <p id="chat-location-description" aria-live="polite" className="mt-2 text-sm leading-relaxed text-muted">
+          {locationPrompt === "request" && "내 위치 주변 메뉴를 찾으려면 위치 권한을 허용해 주세요."}
+          {locationPrompt === "pending" && "현재 위치를 확인하고 있어요."}
+          {locationPrompt === "denied" && "위치 권한이 꺼져 있어요. 브라우저의 사이트 설정에서 위치를 허용하거나, 장소 이름으로 검색해 주세요."}
+          {locationPrompt === "unavailable" && "현재 위치를 가져오지 못했어요. 기기의 위치 설정을 확인하거나, 장소 이름으로 검색해 주세요."}
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" disabled={locationPrompt === "pending"} onClick={() => locationDialog.current?.close()}
+            className="touch-target rounded-full px-4 text-sm font-semibold text-muted disabled:opacity-50">
+            {locationPrompt === "request" || locationPrompt === "pending" ? "취소" : "닫기"}
+          </button>
+          {(locationPrompt === "request" || locationPrompt === "pending") && (
+            <button type="button" disabled={locationPrompt === "pending"} onClick={() => void retryLocation()}
+              className="touch-target rounded-full bg-primary px-4 text-sm font-semibold text-white disabled:opacity-50">
+              위치 권한 요청
+            </button>
+          )}
+        </div>
+      </dialog>
       <Toast message={toast ?? ""} visible={Boolean(toast)} />
     </main>
   );
