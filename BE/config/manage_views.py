@@ -15,7 +15,7 @@ from django.middleware.csrf import get_token
 from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.cache import never_cache
 
-from catalog.models import Restaurant, Menu, InformationReport
+from catalog.models import Restaurant, Menu, InformationReport, FoodDeclaration, CatalogSource, CANONICAL_TAGS
 from catalog.operations import review_report, apply_report
 from dietary.models import Criterion, SupportRule, Review
 
@@ -120,6 +120,11 @@ def serialize(obj, fields):
         result[name] = getattr(obj, field.attname)
     if isinstance(obj, Menu):
         result['restaurant_name'] = obj.restaurant.name
+        result['allergens'] = list(obj.declarations.filter(kind='allergen').order_by('pk').values(
+            'id', 'name_raw', 'canonical_tag', 'presence', 'verification_status',
+            'source_id', 'confirmed_at', 'unknown_scope', 'applicability_scope'))
+        reference = getattr(obj, 'analysis_reference', None)
+        result['reference_allergens'] = reference.public_allergens if reference and not obj.data.get('admin_allergens_edited') else ''
     if isinstance(obj, SupportRule):
         result['criterion_name'] = obj.criterion.name
     return result
@@ -132,6 +137,13 @@ def audit(request, obj, action, message):
 
 @staff
 def records(request, resource, pk=None):
+    if resource == 'allergen-options' and request.method == 'GET' and pk is None:
+        if not permission(request.user, Menu, 'view'):
+            return error('이 작업에 대한 권한이 없습니다.', 403)
+        allergens = [{'tag': criterion.code.removeprefix('allergen-'), 'name': criterion.name}
+                     for criterion in Criterion.objects.filter(kind='allergen', active=True).order_by('pk')
+                     if criterion.code.removeprefix('allergen-') in CANONICAL_TAGS]
+        return JsonResponse({'allergens': allergens})
     if resource not in RESOURCES:
         return error('없는 관리 항목입니다.', 404)
     if request.method not in {'GET', 'POST', 'PATCH', 'DELETE'}:
@@ -149,7 +161,7 @@ def records(request, resource, pk=None):
         return error('이 작업에 대한 권한이 없습니다.', 403)
     queryset = model.objects.all().order_by(model._meta.pk.name)
     if resource == 'menus':
-        queryset = queryset.select_related('restaurant')
+        queryset = queryset.select_related('restaurant', 'analysis_reference')
     if resource == 'rules':
         queryset = queryset.select_related('criterion')
     if request.method == 'GET':
@@ -198,8 +210,11 @@ def records(request, resource, pk=None):
             creating = request.method == 'POST' and pk is None and resource in {'criteria', 'rules'}
             if not creating and (request.method != 'PATCH' or obj is None):
                 return error('등록은 기준 정보와 판단 규칙에서만 지원합니다.')
-            if not data or set(data) - set(fields):
+            allowed_fields = set(fields) | ({'allergens'} if resource == 'menus' else set())
+            if not data or set(data) - allowed_fields:
                 return error('수정할 필드를 확인하세요.')
+            has_allergens = 'allergens' in data
+            allergens = data.pop('allergens', None)
             # Codes and kinds have existing profile/rule references; keep them stable.
             if not creating and resource == 'criteria' and set(data) & {'code', 'kind'}:
                 return error('등록된 코드와 유형은 변경할 수 없습니다.')
@@ -217,9 +232,41 @@ def records(request, resource, pk=None):
             if not form.is_valid():
                 return error(' / '.join(f'{key}: {", ".join(values)}' for key, values in form.errors.items()))
             obj = form.save()
-            audit(request, obj, ADDITION if creating else CHANGE, '관리 페이지: ' + ', '.join(edit_fields))
+            if has_allergens:
+                save_menu_allergens(request, obj, allergens)
+                obj.data = {**obj.data, 'admin_allergens_edited': True}
+                obj.save(update_fields=['data'])
+            audit(request, obj, ADDITION if creating else CHANGE, '관리 페이지: ' + ', '.join(edit_fields + (['allergens'] if has_allergens else [])))
             return JsonResponse(serialize(obj, fields), status=201 if creating else 200)
     except (ValueError, TypeError, UnicodeError, ValidationError) as exc:
         return error('; '.join(exc.messages) if isinstance(exc, ValidationError) else '요청 값의 형식을 확인하세요.')
     except PermissionDenied:
         return error('대상 정보 수정 권한이 없습니다.', 403)
+
+
+def save_menu_allergens(request, menu, rows):
+    if not isinstance(rows, list) or len(rows) > 100:
+        raise ValidationError('알레르기 정보는 최대 100개의 목록이어야 합니다.')
+    existing = {row.pk: row for row in menu.declarations.filter(kind='allergen')}
+    kept = set()
+    fields = ['name_raw', 'canonical_tag', 'presence', 'verification_status',
+              'source', 'confirmed_at', 'unknown_scope', 'applicability_scope']
+    for row in rows:
+        if not isinstance(row, dict) or set(row) - (set(fields) - {'source'}) - {'id', 'source_id'}:
+            raise ValidationError('알레르기 정보의 필드를 확인하세요.')
+        row_id = row.get('id')
+        if row_id is not None and (type(row_id) is not int or row_id not in existing or row_id in kept):
+            raise ValidationError('수정할 알레르기 정보를 확인하세요.')
+        declaration = existing.get(row_id) or FoodDeclaration(menu=menu, kind='allergen')
+        data = {key: row.get(key, '') for key in fields}
+        data['source'] = row.get('source_id')
+        form = modelform_factory(FoodDeclaration, fields=fields)(data=data, instance=declaration)
+        if not form.is_valid():
+            raise ValidationError(' / '.join(f'{key}: {", ".join(errors)}' for key, errors in form.errors.items()))
+        declaration = form.save()
+        kept.add(declaration.pk)
+        audit(request, declaration, CHANGE if row_id else ADDITION, '메뉴 관리: 알레르기 정보')
+    for row_id, declaration in existing.items():
+        if row_id not in kept:
+            audit(request, declaration, DELETION, '메뉴 관리: 알레르기 정보 삭제')
+            declaration.delete()

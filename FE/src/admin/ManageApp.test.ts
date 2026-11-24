@@ -50,6 +50,31 @@ describe('관리자 화면', () => {
     fireEvent.click(screen.getByRole('button', { name: '저장' }));
     await waitFor(() => expect(fetcher.mock.calls.some(([, options]) => options?.method === 'PATCH')).toBe(true));
     const [, options] = fetcher.mock.calls.find(([, init]) => init?.method === 'PATCH')!;
-    expect(JSON.parse(options!.body as string)).toEqual({ name: '수정 메뉴', description: '', price_amount: null, category: '' });
+    expect(JSON.parse(options!.body as string)).toEqual({ name: '수정 메뉴', description: '', price_amount: null, category: '', allergens: [] });
+  });
+
+  it('기존 알레르기를 체크박스로 표시하고 선택한 항목만 저장한다', async () => {
+    const fetcher = vi.fn((url: string, options?: RequestInit) => {
+      if (url.endsWith('/session')) return respond({ authenticated: true, username: 'operator', permissions: ['catalog.view_menu', 'catalog.change_menu'] });
+      if (url.endsWith('/allergen-options')) return respond({ allergens: [{ tag: 'milk', name: '우유' }, { tag: 'soy', name: '대두' }, { tag: 'egg', name: '난류' }] });
+      if (options?.method === 'PATCH') return respond({ id: 'm1' });
+      return respond({ total: 1, results: [{ id: 'm1', name: '메뉴', allergens: [], reference_allergens: '우유 | 대두' }] });
+    });
+    vi.stubGlobal('fetch', fetcher);
+    mount('/manage/menus');
+    expect(await screen.findByText('우유, 대두')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '열기' }));
+    const milk = await screen.findByRole('checkbox', { name: '우유' });
+    expect((milk as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole('checkbox', { name: '대두' }) as HTMLInputElement).checked).toBe(true);
+    expect(screen.queryByText(/유사/)).toBeNull();
+    expect(screen.queryByLabelText('출처')).toBeNull();
+    expect(screen.queryByLabelText('검증 상태')).toBeNull();
+    fireEvent.click(milk);
+    fireEvent.click(screen.getByRole('checkbox', { name: '난류' }));
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(fetcher.mock.calls.some(([, options]) => options?.method === 'PATCH')).toBe(true));
+    const [, options] = fetcher.mock.calls.find(([, init]) => init?.method === 'PATCH')!;
+    expect(JSON.parse(options!.body as string).allergens.map((row: { canonical_tag: string }) => row.canonical_tag)).toEqual(['soy', 'egg']);
   });
 });
