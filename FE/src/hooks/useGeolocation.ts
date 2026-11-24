@@ -6,6 +6,8 @@ type GeoStatus = "idle" | "loading" | "success" | GeoFailure;
 let lastFix: { point: GeoPoint; at: number } | null = null;
 let pendingFix: Promise<GeoPoint> | null = null;
 const freshFix = () => lastFix && Date.now() - lastFix.at < 60_000 ? lastFix.point : null;
+/** Read a recent location without triggering a permission prompt. */
+export const getCachedLocation = () => freshFix();
 
 export class LocationError extends Error {
   constructor(public status: GeoFailure) { super(status); }

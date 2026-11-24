@@ -291,3 +291,23 @@ Social metadata uses a short title and description and a 1200×630 PNG containin
 existing background logo with padding. Original logo files are preserved. The new
 `/logo/share-logo.png` URL replaces the former square OG image; deployed social
 previews may still need their crawler cache refreshed.
+
+## Home startup and refresh behavior
+
+- Home and the introduction stay in the initial route bundle. Map, chat, setup,
+  detail and other secondary pages load as separate route chunks with skeleton fallbacks.
+- After server session/profile hydration, returning users with completed setup
+  prefetch the home first page from the introduction. The request uses the same
+  filters, profile signature, recent cached location (or Asan fallback), and query
+  key as the home screen. Prefetch does not request GPS permission or block navigation.
+- Background refresh keeps loaded cards. Location/page transitions may keep prior
+  cards only within the same profile/filter scope; old distances and card actions
+  are unavailable until the new location/page response arrives. Filter/profile
+  changes show skeletons rather than previous dietary results.
+- GPS never blocks the initial Asan request. A successful fix updates results
+  in the background; existing cancellation and query-cache reuse still apply.
+- This change does not alter dietary evaluation or rebuild production data.
+  After imports or rule changes, operators can run the existing
+  `BE/.venv/Scripts/python.exe BE/manage.py rebuild_dietary_index` command against
+  the intended database before traffic reaches newly invalidated data. Run it as
+  a maintenance operation, rather than adding it to each homepage request.

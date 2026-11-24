@@ -4,11 +4,30 @@ import { Disclaimer } from "@/components/Disclaimer";
 import { MascotLogo } from "@/components/MascotLogo";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useProfileStore } from "@/store/profileStore";
+import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useDiscoveryFilters } from "@/hooks/useDiscovery";
+import { getCachedLocation } from "@/hooks/useGeolocation";
+import { ASAN_ORIGIN } from "@/data/mock";
+import { homeRestaurantParams, homeRestaurantsOptions } from "@/lib/api/homeRestaurants";
+import { profileSignature } from "@/lib/api/homeMenus";
 
 export default function SplashPage() {
   const { ready, error, retry } = useSessionState();
   const navigate = useNavigate();
   const completed = useProfileStore((s) => s.completed);
+  const allergens = useProfileStore((s) => s.allergens);
+  const restrictions = useProfileStore((s) => s.restrictions);
+  const profile = profileSignature(allergens, restrictions);
+  const client = useQueryClient();
+
+  useEffect(() => {
+    if (!ready || !completed) return;
+    const filters = useDiscoveryFilters.getState().home;
+    const params = homeRestaurantParams(filters, filters.query, getCachedLocation() ?? ASAN_ORIGIN);
+    // Same key as ExplorePage: navigation reuses or joins this request.
+    void client.prefetchQuery(homeRestaurantsOptions({ ...params, page: 1 }, profile));
+  }, [ready, completed, profile, client]);
 
   const start = () => {
     if (completed) navigate("/explore");
