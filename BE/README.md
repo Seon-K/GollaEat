@@ -88,4 +88,4 @@ flowchart TD
 .\.venv\Scripts\python.exe manage.py test
 ```
 
-[카탈로그 적재](catalog/README.md) · [카탈로그 API](catalog/API.md) · [식이 판정 계약](dietary/README.md) · [AI 챗봇](chatbot/README.md)
+[카탈로그 적재](catalog/API.md) · [카탈로그 API](catalog/API.md) · [식이 판정 계약](README.md#식이-판정) · [AI 챗봇](chatbot/README.md)

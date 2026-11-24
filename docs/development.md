@@ -39,7 +39,7 @@ flowchart TD
 
 | 기능 | 필요한 설정 |
 | --- | --- |
-| 실제 메뉴·식당 조회 | 기본 마이그레이션 + [카탈로그 적재](../BE/catalog/README.md) |
+| 실제 메뉴·식당 조회 | 기본 마이그레이션 + [카탈로그 적재](../BE/catalog/API.md) |
 | 지도 표시 | FE `VITE_KAKAO_MAP_APP_KEY`, 카카오 콘솔의 도메인 등록 |
 | AI 자연어 | BE `OPENROUTER_API_KEY` 또는 `GEMINI_API_KEY` |
 | AI 장소명 검색 | BE `KAKAO_LOCAL_REST_API_KEY` |
