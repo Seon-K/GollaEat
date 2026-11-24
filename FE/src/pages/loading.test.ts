@@ -81,6 +81,19 @@ describe("restaurant home integration", () => {
     expect(screen.queryByRole('status', { name: '식당 목록 로딩 중' })).toBeNull();
     await act(async () => pending.resolve({ items: [restaurant], pagination }));
   });
+  it('shows skeletons instead of previous cards while fetching another page', async () => {
+    const pending = deferred<{ items: typeof restaurant[]; pagination: typeof pagination }>();
+    mocks.provider.getRestaurants.mockResolvedValueOnce({ items: [restaurant], pagination: { ...pagination, limit: 10, total: 20, totalPages: 2, nextPage: 2 } }).mockReturnValueOnce(pending.promise);
+    mount(h(ExplorePage));
+    await screen.findByText('기존 식당');
+    const scroll = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    fireEvent.click(screen.getByRole('button', { name: '다음 페이지' }));
+    scroll.mockRestore();
+    await screen.findByRole('status', { name: '식당 목록 로딩 중' });
+    expect(screen.queryByText('기존 식당')).toBeNull();
+    await act(async () => pending.resolve({ items: [{ ...restaurant, id: 'r2', name: '다음 식당' }], pagination: { ...pagination, page: 2 } }));
+    expect(await screen.findByText('다음 식당')).toBeTruthy();
+  });
   it("keeps cards during GPS updates but hides their old distance", async () => {
     mocks.provider.getRestaurants.mockResolvedValueOnce({ items: [restaurant], pagination }).mockReturnValueOnce(new Promise(() => {}));
     const view = mount(h(ExplorePage));

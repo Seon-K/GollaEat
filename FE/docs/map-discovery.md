@@ -300,10 +300,10 @@ previews may still need their crawler cache refreshed.
   prefetch the home first page from the introduction. The request uses the same
   filters, profile signature, recent cached location (or Asan fallback), and query
   key as the home screen. Prefetch does not request GPS permission or block navigation.
-- Background refresh keeps loaded cards. Location/page transitions may keep prior
-  cards only within the same profile/filter scope; old distances and card actions
-  are unavailable until the new location/page response arrives. Filter/profile
-  changes show skeletons rather than previous dietary results.
+- Background refresh keeps loaded cards. Location transitions may keep prior
+  cards only within the same page/profile/filter scope; old distances and card actions
+  are unavailable until the new location response arrives. Page/filter/profile
+  changes show skeletons while fetching rather than previous dietary results.
 - GPS never blocks the initial Asan request. A successful fix updates results
   in the background; existing cancellation and query-cache reuse still apply.
 - This change does not alter dietary evaluation or rebuild production data.
