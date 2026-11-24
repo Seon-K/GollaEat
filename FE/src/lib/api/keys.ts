@@ -1,3 +1,7 @@
+export function isPersonalizedQuery(query: { queryKey: readonly unknown[] }) {
+  return ["menus", "menu", "restaurants", "restaurant", "judgement", "favorites"].includes(String(query.queryKey[1]));
+}
+
 /** TanStack Query 키 팩토리 */
 export const apiKeys = {
   all: ["gollaeat"] as const,

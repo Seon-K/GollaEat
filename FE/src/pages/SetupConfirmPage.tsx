@@ -2,6 +2,8 @@ import { SkeletonBlock } from "@/components/LoadingSkeleton";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { isPersonalizedQuery } from "@/lib/api/keys";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Chip } from "@/components/Chip";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -13,6 +15,7 @@ import { getDataProvider } from "@/lib/api/providers";
 import { useProfileStore } from "@/store/profileStore";
 
 function SetupConfirmContent() {
+  const client = useQueryClient();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const fromMy = searchParams.get("from") === "my";
@@ -30,6 +33,9 @@ function SetupConfirmContent() {
       const criteria = profileToCriteriaCodes({ allergens, restrictions });
       const updated = await getDataProvider().putProfile(criteria);
       hydrateFromApi(updated);
+      // Editing local selections can refetch against the old server profile.
+      // Invalidate again after the server has committed the new criteria.
+      void client.invalidateQueries({ predicate: isPersonalizedQuery });
       saveProfile();
       navigate(fromMy ? "/my" : "/explore");
     } catch (e) {

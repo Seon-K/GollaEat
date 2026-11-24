@@ -244,8 +244,6 @@ def list_menus(params, repository=None, *, profile=None):
         judgements = {menu['menu_id']: evaluate(profile, menu['menu_id'], context=context) for menu in menus}
         context.flush()
         if judgement_status:
-            if not context.criteria:
-                judgements = {mid: dict(j, status='needs_check', sort_key=[1, 0, mid]) for mid, j in judgements.items()}
             menus = [m for m in menus if judgements[m['menu_id']]['status'] == judgement_status]
     db_page = repository.ordered_menu_page(menus, sort, page, limit) if compact else None
     if db_page is not None:

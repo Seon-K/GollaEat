@@ -11,6 +11,16 @@ from .services import check_order, evaluate
 
 @override_settings(CATALOG_USE_DB=True, DIETARY_CATALOG_ADAPTER='catalog.adapters.DietaryCatalog')
 class StatusGuidanceTests(TestCase):
+    def test_no_conditions_match_without_reading_missing_or_malformed_evidence(self):
+        self.profile.criteria.clear()
+        with patch('dietary.services.get_catalog', side_effect=AssertionError('no restrictions need no evidence')):
+            for component_id in (self.menu.pk, 'missing-menu'):
+                result = evaluate(self.profile, component_id)
+                self.assertEqual(result['status'], 'match')
+                self.assertEqual(result['unknown_items'], [])
+                self.assertEqual(result['guidance']['basis'], 'no_restrictions')
+                self.assertIn('확인했다는 의미는 아닙니다', result['guidance']['message'])
+
     def setUp(self):
         self.client.get('/api/session')
         self.profile = Profile.objects.get(guest_id=self.client.session['dietary_owner'])

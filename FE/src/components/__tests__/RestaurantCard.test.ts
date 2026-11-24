@@ -23,7 +23,15 @@ describe("restaurant verdict counts", () => {
       else expect(html).not.toContain(text);
     }
   });
-  it("does not represent an unconfigured profile as a match", () => {
+  it("shows server match counts and explains the unrestricted profile", () => {
+    const html = renderToStaticMarkup(createElement(RestaurantCard, { restaurant: {
+      ...restaurant, personalization: { applied: true, profile_configured: false },
+      dietarySummary: { match_menu_count: 9, mismatch_menu_count: 0, check_menu_count: 0 },
+    }, selected: false, onSelect() {}, showDistance: false }));
+    expect(html).toContain("일치 9개");
+    expect(html).toContain("식이조건 미설정 · 모든 메뉴 일치");
+  });
+  it("does not invent a verdict for a non-personalized response", () => {
     const html = renderToStaticMarkup(createElement(RestaurantCard, { restaurant: { ...restaurant, personalization: { applied: false, profile_configured: false } }, selected: false, onSelect() {}, showDistance: false }));
     expect(html).toContain("식이조건 설정 후 판정 확인");
     expect(html).not.toContain("일치 2개");

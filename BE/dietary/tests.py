@@ -77,7 +77,7 @@ class DietaryTests(TestCase):
         self.send(a, 'put', '/api/profile', {'criteria': []})
         self.assertEqual(a.get('/api/favorites').json()['favorites'][0]['judgement']['status'], 'match')
         self.data.pop('yes')
-        self.assertEqual(a.get('/api/favorites').json()['favorites'][0]['judgement']['status'], 'needs_check')
+        self.assertEqual(a.get('/api/favorites').json()['favorites'][0]['judgement']['status'], 'match')
 
     def test_reviews_ownership_consent_and_snapshot(self):
         a, b = Client(), Client()

@@ -131,7 +131,7 @@ def discover_restaurants(params, repository, profile=None):
         summary = dict(match_menu_count=0, check_menu_count=0, mismatch_menu_count=0)
         candidates = []
         for m in ms:
-            judgement = evaluate(profile, m['menu_id'], context=context) if configured else None
+            judgement = evaluate(profile, m['menu_id'], context=context) if personalize else None
             status = judgement['status'] if judgement else 'needs_check'
             key = {'match': 'match_menu_count', 'needs_check': 'check_menu_count', 'mismatch': 'mismatch_menu_count'}.get(status, 'check_menu_count')
             summary[key] += 1
@@ -148,7 +148,7 @@ def discover_restaurants(params, repository, profile=None):
             representative = _serialize(menu)
             representative['judgement'] = judgement
         r.update(dietary_summary=summary, representative_menu=representative,
-                 personalization={'applied': bool(personalize and configured), 'profile_configured': configured})
+                 personalization={'applied': personalize, 'profile_configured': configured})
         prices = [c[2]['price_amount'] for c in candidates if c[2].get('price_amount') is not None]
         r['min_menu_price'] = min(prices) if prices else None
         results.append(r)

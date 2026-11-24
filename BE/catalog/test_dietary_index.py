@@ -89,9 +89,10 @@ class DietaryIndexTests(TestCase):
             result = discover_restaurants(dict(personalize='true', view='card', sort='dietary'),
                 DatabaseCatalogRepository(), self.empty)
         row = result['results'][0]
-        self.assertFalse(row['personalization']['applied'])
+        self.assertTrue(row['personalization']['applied'])
+        self.assertFalse(row['personalization']['profile_configured'])
         self.assertEqual(row['dietary_summary'], {
-            'match_menu_count': 0, 'check_menu_count': 45, 'mismatch_menu_count': 0})
+            'match_menu_count': 45, 'check_menu_count': 0, 'mismatch_menu_count': 0})
 
     def test_snapshot_context_reduces_detail_reads_without_changing_judgement(self):
         from dietary.services import EvaluationContext, evaluate
@@ -155,12 +156,33 @@ class DietaryIndexTests(TestCase):
         self.assertTrue(MenuDietaryState.objects.filter(dirty=True).exists())
         self.assertEqual(self.menus(judgement_status='match')['pagination']['total'], 0)
 
-    def test_unconfigured_no_false_match_and_pagination(self):
+    def test_unconfigured_matches_all_menus_and_pagination(self):
         result = list_menus(dict(sort='dietary', judgement_status='match'), DatabaseCatalogRepository(), profile=self.empty)
-        self.assertEqual(result['pagination']['total'], 0)
+        self.assertEqual(result['pagination']['total'], 45)
         result = self.menus(page='999')
         self.assertEqual(result['results'], [])
         self.assertEqual(result['pagination']['total'], 45)
+
+    def test_unconfigured_status_filters_and_restaurant_counts_match_both_paths(self):
+        for enabled in (False, True):
+            with override_settings(CATALOG_DIETARY_INDEX_ENABLED=enabled):
+                for status, total in [('match', 45), ('needs_check', 0), ('mismatch', 0)]:
+                    with self.subTest(index=enabled, status=status):
+                        menus = list_menus(dict(sort='dietary', judgement_status=status, page='2', limit='7'),
+                            DatabaseCatalogRepository(), profile=self.empty)
+                        self.assertEqual(menus['pagination']['total'], total)
+                        self.assertEqual(len(menus['results']), 7 if total else 0)
+                        self.assertTrue(all(row['judgement']['status'] == 'match' for row in menus['results']))
+                        for view in ('card', 'full'):
+                            stores = discover_restaurants(dict(personalize='true', view=view, judgement_status=status),
+                                DatabaseCatalogRepository(), self.empty)
+                            self.assertEqual(stores['pagination']['total'], 1 if total else 0)
+                            if stores['results']:
+                                row = stores['results'][0]
+                                self.assertEqual(row['dietary_summary']['match_menu_count'], 45)
+                                self.assertEqual(row['dietary_summary']['check_menu_count'], 0)
+                                self.assertTrue(row['personalization']['applied'])
+                                self.assertFalse(row['personalization']['profile_configured'])
 
     def test_expiry_is_local_and_combined_conditions_keep_parity(self):
         source = CatalogSource.objects.create(title='Expiring', evidence_locator='record', source_type='store',
@@ -195,7 +217,7 @@ class DietaryIndexTests(TestCase):
         result = self.menus(q='special alias')
         self.assertEqual([row['menu_id'] for row in result['results']], ['m00'])
         self.profile.criteria.clear()
-        self.assertEqual(self.menus(judgement_status='match')['pagination']['total'], 0)
+        self.assertEqual(self.menus(judgement_status='match')['pagination']['total'], 45)
         self.profile.criteria.add(Criterion.objects.get(code='allergen-milk'))
         self.assertEqual(self.menus(judgement_status='match')['pagination']['total'], 15)
 
