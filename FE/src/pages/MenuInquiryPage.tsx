@@ -72,6 +72,8 @@ export default function MenuInquiryPage() {
     restrictions,
   });
   const phone = menu.phone?.trim() || null;
+  const dialNumber = phone?.replace(/[\s().-]/g, "") ?? "";
+  const phoneHref = /^\+?\d{7,15}$/.test(dialNumber) ? `tel:${dialNumber}` : null;
 
   const copyMessage = async () => {
     try {
@@ -165,13 +167,14 @@ export default function MenuInquiryPage() {
         title="매장에 문의하기"
       >
         <p className="text-[14px] leading-relaxed text-muted">
-          {menu.restaurantName}에 전화하거나, 직원에게 확인 화면을 보여줄 수
-          있어요.
+          {phoneHref
+            ? `${menu.restaurantName}에 전화하거나 직원에게 확인 화면을 보여줄 수 있어요.`
+            : "등록된 전화번호가 없어요. 직원에게 확인 화면을 보여줄 수 있어요."}
         </p>
         <div className="mt-4 space-y-2 pb-2">
-          {phone ? (
+          {phoneHref ? (
             <a
-              href={`tel:${phone.replace(/[^\d+]/g, "")}`}
+              href={phoneHref}
               className="flex h-12 w-full items-center justify-center gap-2 rounded-[28px] bg-primary text-[15px] font-semibold text-white"
             >
               <Phone className="size-4" />
@@ -185,7 +188,7 @@ export default function MenuInquiryPage() {
               navigate(`/show-staff?menuId=${menu.id}`);
             }}
             className={`flex h-12 w-full items-center justify-center rounded-[28px] text-[15px] font-semibold ${
-              phone
+              phoneHref
                 ? "bg-primary-light text-primary"
                 : "bg-primary text-white"
             }`}
