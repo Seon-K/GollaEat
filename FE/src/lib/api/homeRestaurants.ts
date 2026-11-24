@@ -10,9 +10,9 @@ export function homeRestaurantParams(filters: DiscoveryFilters, query: string, o
   return { ...filterParams(filters, query), region: '아산시', personalize: true, lat: origin.lat, lng: origin.lng };
 }
 
-/** Keep cards only while moving or paging within the same profile/filter scope. */
+/** Keep cards only while moving within the same page/profile/filter scope. */
 export function restaurantDisplayScope(params: RestaurantListParams, profile: string) {
-  const { lat: _lat, lng: _lng, page: _page, ...filters } = params;
+  const { lat: _lat, lng: _lng, ...filters } = params;
   return JSON.stringify({ ...filters, profile });
 }
 

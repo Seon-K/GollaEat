@@ -98,6 +98,16 @@ textarea:focus:not(:focus-visible) {
   display: none;
 }
 
+@keyframes chat-thinking {
+  0%, 60%, 100% { transform: translateY(0); opacity: .4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+.chat-thinking-dot { animation: chat-thinking 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .chat-thinking-dot { animation: none; }
+}
+
 /* The staff card also colors the frame safe area and removes its white top gap. */
 html:has(.staff-view), body:has(.staff-view) { background: var(--color-primary-dark); }
 .app-frame:has(.staff-view) { background: var(--color-primary-dark); }

@@ -15,6 +15,7 @@ import { Chip } from "@/components/Chip";
 import { Disclaimer } from "@/components/Disclaimer";
 import { MenuCard } from "@/components/MenuCard";
 import { Mascot } from "@/components/Mascot";
+import { ChatThinking } from "@/components/ChatThinking";
 import { Toast } from "@/components/Toast";
 import { allergenLabel } from "@/data/allergens";
 import { restrictionLabel } from "@/data/restrictions";
@@ -482,7 +483,7 @@ export default function AiPage() {
             </button>
           ) : null}
           {sending ? (
-            <p className="text-center text-[13px] text-muted">답변 준비 중…</p>
+            <ChatThinking />
           ) : null}
         </div>
       </div>
@@ -530,7 +531,7 @@ export default function AiPage() {
         <p id="chat-location-description" aria-live="polite" className="mt-2 text-sm leading-relaxed text-muted">
           {locationPrompt === "request" && "내 위치 주변 메뉴를 찾으려면 위치 권한을 허용해 주세요."}
           {locationPrompt === "pending" && "현재 위치를 확인하고 있어요."}
-          {locationPrompt === "denied" && "위치 권한이 꺼져 있어요. 브라우저의 사이트 설정에서 위치를 허용하거나, 장소 이름으로 검색해 주세요."}
+          {locationPrompt === "denied" && "위치 권한이 꺼져 있어요. 다시 요청해도 권한 창이 나타나지 않으면 주소창의 사이트 설정에서 위치를 허용한 뒤 다시 눌러 주세요. 장소 이름으로도 검색할 수 있어요."}
           {locationPrompt === "unavailable" && "현재 위치를 가져오지 못했어요. 기기의 위치 설정을 확인하거나, 장소 이름으로 검색해 주세요."}
         </p>
         <div className="mt-4 flex justify-end gap-2">
@@ -538,7 +539,7 @@ export default function AiPage() {
             className="touch-target rounded-full px-4 text-sm font-semibold text-muted disabled:opacity-50">
             {locationPrompt === "request" || locationPrompt === "pending" ? "취소" : "닫기"}
           </button>
-          {(locationPrompt === "request" || locationPrompt === "pending") && (
+          {(
             <button type="button" disabled={locationPrompt === "pending"} onClick={() => void retryLocation()}
               className="touch-target rounded-full bg-primary px-4 text-sm font-semibold text-white disabled:opacity-50">
               위치 권한 요청
