@@ -10,6 +10,7 @@ import ExplorePage from "@/pages/ExplorePage";
 import MenuDetailPage from "@/pages/MenuDetailPage";
 import SplashPage from "@/pages/SplashPage";
 import { SessionGate } from "@/components/SessionGate";
+import { useProfileStore } from "@/store/profileStore";
 
 const mocks = vi.hoisted(() => ({
   ensureSession: vi.fn(),
@@ -51,6 +52,7 @@ function mount(component: ReturnType<typeof h>, path = "/explore", gated = false
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useProfileStore.setState({ allergens: [], restrictions: [], completed: false });
   useDiscoveryFilters.setState({ home: { query: "", category: "all", sort: "dietary", status: "all" }, homePage: 1, homePageScope: "" });
   mocks.provider.getRestaurants.mockReset().mockResolvedValue({ items: [], pagination: { ...pagination, limit: 10 } });
   mocks.getBootstrapProfile.mockReset().mockImplementation(async () => { await mocks.ensureSession(); return null; });
@@ -65,6 +67,47 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe("restaurant home integration", () => {
+  const restaurant = { id: 'r1', name: '기존 식당', address: '아산시', phone: null, lat: 36, lng: 127, distanceKm: 1,
+    map: { kakaoMapUrl: null, kakaoDirectionsUrl: null, walkingDirectionsUrl: null, mapUrl: null } };
+  it("keeps loaded cards during a background refresh", async () => {
+    const pending = deferred<{ items: typeof restaurant[]; pagination: typeof pagination }>();
+    mocks.provider.getRestaurants.mockResolvedValueOnce({ items: [restaurant], pagination }).mockReturnValueOnce(pending.promise);
+    const view = mount(h(ExplorePage));
+    await screen.findByText('기존 식당');
+    void view.client.invalidateQueries({ queryKey: ['gollaeat', 'restaurants'] });
+    await screen.findByRole('status', { name: '식당 목록 갱신 중' });
+    expect(screen.getByText('기존 식당')).toBeTruthy();
+    expect(screen.queryByRole('status', { name: '식당 목록 로딩 중' })).toBeNull();
+    await act(async () => pending.resolve({ items: [restaurant], pagination }));
+  });
+  it("keeps cards during GPS updates but hides their old distance", async () => {
+    mocks.provider.getRestaurants.mockResolvedValueOnce({ items: [restaurant], pagination }).mockReturnValueOnce(new Promise(() => {}));
+    const view = mount(h(ExplorePage));
+    await screen.findByText('기존 식당');
+    mocks.geo.position = { lat: 36.8, lng: 127.1 };
+    view.rerenderPage();
+    await screen.findByRole('status', { name: '식당 목록 갱신 중' });
+    expect(screen.getByText('기존 식당')).toBeTruthy();
+    expect(screen.queryByText('내 위치에서 1.0km')).toBeNull();
+    expect((screen.getByRole('button', { name: '기존 식당 메뉴 보기' }).closest('fieldset') as HTMLFieldSetElement).disabled).toBe(true);
+  });
+  it("does not reuse cards across profile changes", async () => {
+    mocks.provider.getRestaurants.mockResolvedValueOnce({ items: [restaurant], pagination }).mockReturnValue(new Promise(() => {}));
+    mount(h(ExplorePage));
+    await screen.findByText('기존 식당');
+    await act(async () => useProfileStore.setState({ allergens: ['milk'] }));
+    await screen.findByRole('status', { name: '식당 목록 로딩 중' });
+    expect(screen.queryByText('기존 식당')).toBeNull();
+  });
+  it("does not show old cards while a different category is loading", async () => {
+    mocks.provider.getRestaurants.mockResolvedValueOnce({ items: [restaurant], pagination }).mockReturnValue(new Promise(() => {}));
+    mount(h(ExplorePage));
+    await screen.findByText('기존 식당');
+    fireEvent.click(screen.getByRole('button', { name: '음식 카테고리' }));
+    fireEvent.click(screen.getByRole('option', { name: '한식' }));
+    await screen.findByRole('status', { name: '식당 목록 로딩 중' });
+    expect(screen.queryByText('기존 식당')).toBeNull();
+  });
   it("requests ten restaurants with server filters and does not wait for GPS", async () => {
     mocks.geo.status = "loading";
     mount(h(ExplorePage));
