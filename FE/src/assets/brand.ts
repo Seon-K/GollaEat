@@ -1,5 +1,5 @@
 /**
- * 브랜드 로고 — 확정 SVG
+ * 브랜드 로고 — src/assets/logo의 SVG만 사용 (Vite 해시 URL)
  * - 랜딩(스플래시): logo_with_bg.svg
  * - 그 외 모든 화면: logo_no_bg.svg
  */
@@ -20,5 +20,5 @@ export const MASCOT_LINE_SRC = LOGO_NO_BG_SRC;
 export const BRAND_NAME = "골라잇" as const;
 export const BRAND_EN = "GollaEat" as const;
 
-/** favicon / apple-touch (public 고정 경로) */
-export const MASCOT_PUBLIC_SRC = "/logo/logo_with_bg.svg" as const;
+/** @deprecated favicon도 동일한 원본을 사용하며 빌드 시 해시 URL로 변환됨 */
+export const MASCOT_PUBLIC_SRC = LOGO_WITH_BG_SRC;
