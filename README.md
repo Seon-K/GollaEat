@@ -89,8 +89,26 @@
 
 ## 팀원
 
-| 항목 | 팀원 1 | 팀원 2 | 팀원 3 | 팀원 4 | 팀원 5 |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| 이름 | Seon-K | hyejung87 | kyeoon | jangchaeun660 | kimyu11 |
-| 깃허브 프로필 | [Seon-K](https://github.com/Seon-K) | [hyejung87](https://github.com/hyejung87) | [kyeoon](https://github.com/kyeoon) | [jangchaeun660](https://github.com/jangchaeun660) | [kimyu11](https://github.com/kimyu11) |
-| 역할 | 팀장, 백엔드 | 백엔드 | AI 챗봇 | AI 메뉴분석 | 프론트엔드 |
+<table>
+  <tr>
+    <td align="center">김서연</td>
+    <td align="center">황혜정</td>
+    <td align="center">김서연</td>
+    <td align="center">장채운</td>
+    <td align="center">김상율</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://github.com/Seon-K"><img src="https://github.com/Seon-K.png?size=160" alt="Seon-K 프로필 사진" width="80" height="80" /><br />Seon-K</a></td>
+    <td align="center"><a href="https://github.com/hyejung87"><img src="https://github.com/hyejung87.png?size=160" alt="hyejung87 프로필 사진" width="80" height="80" /><br />hyejung87</a></td>
+    <td align="center"><a href="https://github.com/kyeoon"><img src="https://github.com/kyeoon.png?size=160" alt="kyeoon 프로필 사진" width="80" height="80" /><br />kyeoon</a></td>
+    <td align="center"><a href="https://github.com/jangchaeun660"><img src="https://github.com/jangchaeun660.png?size=160" alt="jangchaeun660 프로필 사진" width="80" height="80" /><br />jangchaeun660</a></td>
+    <td align="center"><a href="https://github.com/kimyu11"><img src="https://github.com/kimyu11.png?size=160" alt="kimyu11 프로필 사진" width="80" height="80" /><br />kimyu11</a></td>
+  </tr>
+  <tr>
+    <td align="center">팀장, 백엔드</td>
+    <td align="center">백엔드</td>
+    <td align="center">AI 챗봇</td>
+    <td align="center">AI 메뉴분석</td>
+    <td align="center">프론트엔드</td>
+  </tr>
+</table>
