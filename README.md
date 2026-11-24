@@ -89,10 +89,8 @@
 
 ## 팀원
 
-| 팀원 | 역할 |
-| --- | --- |
-| [Seon-K](https://github.com/Seon-K) | 팀장, 백엔드 |
-| [hyejung87](https://github.com/hyejung87) | 백엔드 |
-| [kyeoon](https://github.com/kyeoon) | AI 챗봇 |
-| [jangchaeun660](https://github.com/jangchaeun660) | AI 메뉴분석 |
-| [kimyu11](https://github.com/kimyu11) | 프론트엔드 |
+| 항목 | 팀원 1 | 팀원 2 | 팀원 3 | 팀원 4 | 팀원 5 |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| 이름 | Seon-K | hyejung87 | kyeoon | jangchaeun660 | kimyu11 |
+| 깃허브 프로필 | [Seon-K](https://github.com/Seon-K) | [hyejung87](https://github.com/hyejung87) | [kyeoon](https://github.com/kyeoon) | [jangchaeun660](https://github.com/jangchaeun660) | [kimyu11](https://github.com/kimyu11) |
+| 역할 | 팀장, 백엔드 | 백엔드 | AI 챗봇 | AI 메뉴분석 | 프론트엔드 |
