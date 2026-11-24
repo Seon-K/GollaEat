@@ -29,8 +29,8 @@ export function RestaurantCard({ restaurant: r, selected, onSelect, showDistance
     return () => { observer?.disconnect(); window.removeEventListener('resize', updateFade); };
   }, [updateFade, status, r.dietarySummary, r.personalization?.applied]);
   const edgeMask = fadeRight ? 'linear-gradient(to right, black calc(100% - 28px), transparent)' : undefined;
-  return <article id={`restaurant-${r.id}`} className={`w-full min-w-0 max-w-full overflow-hidden rounded-2xl border bg-card shadow-sm transition-colors ${selected ? "border-primary ring-1 ring-primary" : "border-border"}`}>
-    <button type="button" onClick={onSelect} aria-label={`${r.name} 메뉴 보기`} aria-pressed={selected} className="flex w-full min-w-0 max-w-full items-start gap-3 p-4 pb-0 text-left hover:bg-primary-light/40 rounded-2xl">
+  return <article id={`restaurant-${r.id}`} className={`w-full min-w-0 max-w-full overflow-hidden rounded-2xl border bg-card shadow-sm transition-colors hover:bg-primary-light/40 ${selected ? "border-primary ring-1 ring-primary" : "border-border"}`}>
+    <button type="button" onClick={onSelect} aria-label={`${r.name} 메뉴 보기`} aria-pressed={selected} className="flex w-full min-w-0 max-w-full items-start gap-3 p-4 pb-0 text-left rounded-2xl">
       <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary-light text-primary"><Utensils className="size-5" /></span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-base font-bold">{r.name}</span>
