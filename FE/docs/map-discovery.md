@@ -12,7 +12,7 @@
 식이 판정은 서버 결과만 사용하며 analysis_reference는 매핑하지 않는다.
 
 기본은 아산 중심 반경 3km. 프로필이 있으면 일치 메뉴가 있는 식당만 조회한다.
-판정 필터는 전체·일치·불일치·추가 확인 필요를 제공한다. 식이조건이 없으면 일치로 추정하지 않는다.
+판정 필터는 전체·일치·불일치·추가 확인 필요를 제공한다. 식이조건이 없으면 서버가 모든 메뉴를 일치로 처리하며, 미설정 안내와 매장 확인 문구를 함께 표시한다.
 현재 위치 사용 버튼은 위치 사용 안내 후 브라우저 권한을 요청한다.
 거부·오류·시간 초과·미지원에서도 아산 또는 사용자가 이동한 영역을 탐색할 수 있다.
 실제 위치를 받은 경우만 ‘내 위치에서’ 거리를 표시한다.
@@ -158,8 +158,8 @@ search does not hide its menus. Menu cards retain their existing detail links.
 Shared home/map restaurant cards show green/check-circle match counts, red/x-circle
 mismatch counts and amber/alert-triangle needs-check counts. The all-status filter
 shows all three. Selecting a status shows only that badge; its count comes from the
-matching `dietary_summary` field, not the representative menu. Unconfigured profiles
-show a setup prompt. Counts describe menus, never whole-restaurant safety.
+matching `dietary_summary` field, not the representative menu. Personalized responses
+for unconfigured profiles show match counts with a no-restrictions explanation. Counts describe menus, never whole-restaurant safety.
 
 
 ## App shell, sheets and personal activity
@@ -240,3 +240,38 @@ The map sheet can collapse to its title/handle. Raised sheet snaps open filter m
 below the controls; lower snaps open them above. Portal options retain mobile taps
 through null-related-target blur, and focus changes use `preventScroll`.
 The staff screen colors the frame safe area and removes the common top padding.
+
+
+## Sheet responsiveness and search feedback
+
+Dragging follows the pointer after a 6px movement threshold and preserves the released
+height. Only releases within 18px of a preset snap to it. Buttons and keyboard controls
+still select preset heights. The title row shows a labelled spinner during map/search
+requests, including while the sheet is collapsed. Direction and collapsed state follow
+the actual free height rather than the nearest preset.
+
+Empty dietary profiles are evaluated by the server as match for every menu, including
+menus with missing evidence. The UI no longer overrides those statuses to check.
+Restaurant summaries, match/status filters, pagination and saved-menu judgements follow
+the same rule. Profile changes also invalidate favorites so removing the last condition
+refreshes saved verdicts. This requires a frontend/backend redeploy but no DB migration
+or dietary index rebuild: per-criterion stored statuses have not changed.
+
+
+## Backend-aligned allergen selections
+
+The allergen selector mirrors the 17 allergen entries returned by `/api/dietary-criteria`.
+The canonical IDs use backend suffixes, including `nuts` (견과류) and `sulfites` (아황산류).
+Peanut/walnut/pine-nut are not independently selectable conditions: the backend supports
+one grouped nuts rule. Legacy local IDs `peanut`, `walnut`, `pinenut` normalize to `nuts`,
+and `sulfite` normalizes to `sulfites`, with duplicates removed on browser hydration and
+API serialization. Every displayed allergen round-trips to one backend code unchanged.
+Labels, staff instructions and mock data use the same catalog. Backend rules, stored
+profiles and database schema are unchanged; no data migration is needed.
+
+
+Ingredient-restriction setup likewise mirrors the 12 backend `ingredient` criteria,
+including category names. The retired UI-only `animal_broth` option is removed from
+selection, local types, demo defaults and mock reasoning. Browser hydration drops
+that unsupported ID while retaining supported selections; it is not replaced by a
+broader condition. All 12 displayed restrictions round-trip through the API mapping.
