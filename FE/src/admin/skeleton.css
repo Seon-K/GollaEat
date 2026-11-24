@@ -1,0 +1,43 @@
+.manage-skeleton-block {
+  display: block;
+  width: 100%;
+  height: 16px;
+  border-radius: 6px;
+  background: linear-gradient(100deg, #e8eee9 25%, #f5f8f5 45%, #e8eee9 65%);
+  background-size: 250% 100%;
+  animation: manage-shimmer 1.5s ease-in-out infinite;
+}
+.manage-skeleton-label { width: 65%; }
+.manage-skeleton-short { width: 80px; }
+.manage-skeleton-title { width: 180px; height: 32px; }
+.manage-skeleton-number { width: 80px; height: 46px; }
+.manage-skeleton-input { height: 48px; margin-top: 18px; }
+.manage-skeleton-heading { display: grid; gap: 18px; margin-bottom: 30px; }
+.manage-skeleton-card {
+  display: grid;
+  gap: 20px;
+  padding: 24px;
+  background: white;
+  border: 1px solid #e0e8e2;
+  border-radius: 14px;
+}
+.manage-skeleton-login {
+  display: grid;
+  gap: 18px;
+  width: 100%;
+  max-width: 420px;
+  padding: 38px;
+  background: white;
+  border: 1px solid #e0e8e2;
+  border-radius: 18px;
+}
+.manage-sidebar .manage-skeleton-block { opacity: .2; }
+.manage-button-skeleton { display: inline-flex; width: 64px; vertical-align: middle; }
+.manage-primary .manage-button-skeleton { opacity: .6; }
+@keyframes manage-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .manage-skeleton-block { animation: none; }
+}

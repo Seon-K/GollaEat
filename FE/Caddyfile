@@ -1,28 +1,27 @@
 {
-    admin off
-    auto_https off
-    persist_config off
+	admin off
+	auto_https off
+	persist_config off
 }
 
 :{$PORT:3000} {
-    encode gzip
+	encode gzip
 
-    handle /healthz {
-        respond "ok" 200
-    }
+	handle /healthz {
+		respond "ok" 200
+	}
 
-    @backend path /api /api/* /admin /admin/* /static /static/*
-    handle @backend {
-        reverse_proxy {$BACKEND_ORIGIN} {
-            # Match Django's allowed backend host and preserve secure cookies.
-            header_up Host {upstream_hostport}
-            header_up X-Forwarded-Proto https
-        }
-    }
+	@backend path /api /api/* /admin /admin/* /static /static/*
+	handle @backend {
+		reverse_proxy {$BACKEND_ORIGIN} {
+			header_up Host {upstream_hostport}
+			header_up X-Forwarded-Proto https
+		}
+	}
 
-    handle {
-        root * /app/dist
-        try_files {path} /index.html
-        file_server
-    }
+	handle {
+		root * /app/dist
+		try_files {path} /index.html
+		file_server
+	}
 }

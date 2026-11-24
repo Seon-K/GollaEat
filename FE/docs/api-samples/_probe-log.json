@@ -1,0 +1,278 @@
+{
+  "backendUrl": "https://gollaeat-be-production.up.railway.app",
+  "menuIds": [
+    "menus_008023",
+    "menus_008024",
+    "menus_001123",
+    "menus_001128",
+    "menus_006904"
+  ],
+  "judgementsSampleStatuses": [
+    {
+      "menu_id": "menus_008023",
+      "status": "needs_check"
+    },
+    {
+      "menu_id": "menus_008024",
+      "status": "needs_check"
+    },
+    {
+      "menu_id": "menus_001123",
+      "status": "needs_check"
+    },
+    {
+      "menu_id": "menus_001128",
+      "status": "needs_check"
+    },
+    {
+      "menu_id": "menus_006904",
+      "status": "needs_check"
+    }
+  ],
+  "profileSnapshot": {
+    "criteria": [
+      "allergen-milk",
+      "exclude-pork"
+    ],
+    "setup_completed": true
+  },
+  "log": [
+    {
+      "step": "get_session",
+      "method": "GET",
+      "path": "/api/session",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "step": "get_dietary_criteria",
+      "method": "GET",
+      "path": "/api/dietary-criteria",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "step": "get_allergens",
+      "method": "GET",
+      "path": "/api/allergens",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "step": "get_restricted_ingredients",
+      "method": "GET",
+      "path": "/api/restricted-ingredients",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "step": "get_menu_categories",
+      "method": "GET",
+      "path": "/api/menu-categories",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "step": "put_profile",
+      "method": "PUT",
+      "path": "/api/profile",
+      "status": 200,
+      "ok": true,
+      "note": "criteria ids from user probe instruction"
+    },
+    {
+      "step": "get_profile",
+      "method": "GET",
+      "path": "/api/profile",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "step": "get_restaurants",
+      "method": "GET",
+      "path": "/api/restaurants?lat=36.78&lng=127.05&radius_km=2&sort=distance_asc",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "step": "get_menus",
+      "method": "GET",
+      "path": "/api/menus?limit=5&personalize=true",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "step": "get_menu_detail",
+      "method": "GET",
+      "path": "/api/menus/menus_008023",
+      "status": 200,
+      "ok": true,
+      "note": "menu_id=menus_008023"
+    },
+    {
+      "step": "get_restaurant_detail",
+      "method": "GET",
+      "path": "/api/restaurants/1233189555",
+      "status": 200,
+      "ok": true,
+      "note": "restaurant_id=1233189555"
+    },
+    {
+      "step": "get_restaurant_menus",
+      "method": "GET",
+      "path": "/api/restaurants/1233189555/menus",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "step": "post_judgements",
+      "method": "POST",
+      "path": "/api/judgements",
+      "status": 200,
+      "ok": true,
+      "note": "spec: { menu_id } — menus_008023"
+    },
+    {
+      "step": "post_judgements_2",
+      "method": "POST",
+      "path": "/api/judgements",
+      "status": 200,
+      "ok": true,
+      "note": "spec: { menu_id } — menus_008024"
+    },
+    {
+      "step": "post_judgements_3",
+      "method": "POST",
+      "path": "/api/judgements",
+      "status": 200,
+      "ok": true,
+      "note": "spec: { menu_id } — menus_001123"
+    },
+    {
+      "step": "post_judgements_4",
+      "method": "POST",
+      "path": "/api/judgements",
+      "status": 200,
+      "ok": true,
+      "note": "spec: { menu_id } — menus_001128"
+    },
+    {
+      "step": "post_judgements_5",
+      "method": "POST",
+      "path": "/api/judgements",
+      "status": 200,
+      "ok": true,
+      "note": "spec: { menu_id } — menus_006904"
+    },
+    {
+      "step": "post_recommendations_rank",
+      "method": "POST",
+      "path": "/api/recommendations/rank",
+      "status": 200,
+      "ok": true,
+      "note": "spec: { menu_ids }"
+    },
+    {
+      "step": "post_orders_check",
+      "method": "POST",
+      "path": "/api/orders/check",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "step": "post_communication",
+      "method": "POST",
+      "path": "/api/communication",
+      "status": 200,
+      "ok": true,
+      "note": "spec: same as orders/check"
+    },
+    {
+      "step": "post_favorites",
+      "method": "POST",
+      "path": "/api/favorites",
+      "status": 201,
+      "ok": true
+    },
+    {
+      "step": "get_favorites",
+      "method": "GET",
+      "path": "/api/favorites",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "step": "delete_favorites",
+      "method": "DELETE",
+      "path": "/api/favorites/2",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "step": "post_reviews",
+      "method": "POST",
+      "path": "/api/reviews",
+      "status": 201,
+      "ok": true
+    },
+    {
+      "step": "get_reviews",
+      "method": "GET",
+      "path": "/api/reviews?menu_id=menus_008023",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "step": "get_review_detail",
+      "method": "GET",
+      "path": "/api/reviews/2",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "step": "patch_reviews",
+      "method": "PATCH",
+      "path": "/api/reviews/2",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "step": "delete_reviews",
+      "method": "DELETE",
+      "path": "/api/reviews/2",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "step": "post_chat",
+      "method": "POST",
+      "path": "/api/chat",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "step": "error_400_judgements",
+      "method": "POST",
+      "path": "/api/judgements",
+      "status": 400,
+      "ok": false,
+      "note": "empty body → expect 400"
+    },
+    {
+      "step": "error_404_menu",
+      "method": "GET",
+      "path": "/api/menus/does-not-exist-menu-id-000",
+      "status": 404,
+      "ok": false,
+      "note": "unknown menu_id → expect 404"
+    },
+    {
+      "step": "error_403_csrf",
+      "method": "PUT",
+      "path": "/api/profile",
+      "status": 403,
+      "ok": false,
+      "note": "invalid CSRF → expect 403 (may auto-retry with fresh session)"
+    }
+  ]
+}

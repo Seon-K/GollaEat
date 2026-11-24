@@ -14,6 +14,50 @@ GENERAL = {
     'invalid_component_data': '제공된 성분 정보의 형식 확인 필요',
 }
 
+# 사용자 화면 공통 주의 문구
+JUDGEMENT_NOTICE = '실제 포함 여부와 교차접촉 가능성은 주문 전 매장에 한 번 더 확인해 주세요.'
+
+
+def judgement_guidance(status, reasons, has_conditions):
+    # 판정 결과와 근거 유형별 사용자 안내
+    if status == 'match':
+        if not has_conditions:
+            basis, label = 'no_restrictions', '식이조건 일치'
+            message = '설정한 식이조건이 없어 모든 메뉴를 일치로 표시합니다. 성분의 포함·불포함을 확인했다는 의미는 아닙니다.'
+        elif reasons and all(
+            reason['condition'].startswith('allergen-') and any(
+                source.get('interpretation') == 'official_menu_allergen_list'
+                for source in reason['sources']) for reason in reasons
+        ):
+            basis, label = 'official_allergen_list', '공식 알레르겐 표시 기준 일치'
+            message = '공식 홈페이지의 알레르겐 정보에 선택한 제한 성분이 기재되어 있지 않습니다.'
+        else:
+            basis, label = 'verified_information', '확인된 자료 기준 일치'
+            message = '확인된 성분 자료상 선택한 제한 조건에 해당하는 성분이 확인되지 않습니다.'
+    elif status == 'needs_check':
+        basis, label = 'insufficient_information', '추가 확인 필요'
+        message = '선택한 제한 성분의 포함 여부를 판단할 정보가 부족하거나 구성·변경 사항에 추가 확인이 필요합니다.'
+    else:
+        hits = [reason for reason in reasons if reason['status'] == 'mismatch']
+        verified = any(reason['verified_problem_ingredients'] for reason in hits)
+        origins = {item['origin'] for reason in hits for item in reason['ai_evidence']}
+        if verified and origins:
+            basis, label = 'verified_and_ai', '제한 성분 확인·분석으로 추천 제외'
+            message = '확인된 자료의 제한 성분 포함 정보와 AI 추출·추정 정보에 따라 추천에서 제외했습니다.'
+        elif verified:
+            basis, label = 'verified_presence', '제한 성분 확인으로 추천 제외'
+            message = '공식·검증된 자료에 선택한 제한 성분이 포함되어 있어 추천에서 제외했습니다.'
+        elif origins == {'gemini'}:
+            basis, label = 'gemini_estimated', 'AI 추정으로 추천 제외'
+            message = 'AI가 선택한 제한 성분의 사용 가능성을 추정해 추천에서 제외했습니다. 실제 포함 여부는 확인되지 않았습니다.'
+        elif origins == {'qwen'}:
+            basis, label = 'qwen_extracted', '메뉴 설명 분석으로 추천 제외'
+            message = '메뉴 설명에서 선택한 제한 성분 관련 표현이 추출되어 추천에서 제외했습니다. 실제 사용 여부는 매장에 확인해 주세요.'
+        else:
+            basis, label = 'ai_analysis', 'AI 분석으로 추천 제외'
+            message = 'AI 추출·추정 정보에 선택한 제한 성분 관련 표현이 있어 추천에서 제외했습니다. 실제 사용 여부는 매장에 확인해 주세요.'
+    return {'label': label, 'message': message, 'notice': JUDGEMENT_NOTICE, 'basis': basis}
+
 
 def unknown_messages(items, names):
     messages = []

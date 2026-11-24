@@ -1,0 +1,201 @@
+{
+  "_meta": {
+    "method": "GET",
+    "path": "/api/dietary-criteria",
+    "status": 200,
+    "ok": true,
+    "expectError": false,
+    "note": null,
+    "savedAt": "2026-11-22T08:43:26.321Z"
+  },
+  "body": {
+    "criteria": [
+      {
+        "code": "allergen-egg",
+        "name": "난류",
+        "kind": "allergen",
+        "category": ""
+      },
+      {
+        "code": "allergen-milk",
+        "name": "우유",
+        "kind": "allergen",
+        "category": ""
+      },
+      {
+        "code": "allergen-buckwheat",
+        "name": "메밀",
+        "kind": "allergen",
+        "category": ""
+      },
+      {
+        "code": "allergen-nuts",
+        "name": "견과류",
+        "kind": "allergen",
+        "category": ""
+      },
+      {
+        "code": "allergen-soy",
+        "name": "대두",
+        "kind": "allergen",
+        "category": ""
+      },
+      {
+        "code": "allergen-wheat",
+        "name": "밀",
+        "kind": "allergen",
+        "category": ""
+      },
+      {
+        "code": "allergen-mackerel",
+        "name": "고등어",
+        "kind": "allergen",
+        "category": ""
+      },
+      {
+        "code": "allergen-crab",
+        "name": "게",
+        "kind": "allergen",
+        "category": ""
+      },
+      {
+        "code": "allergen-shrimp",
+        "name": "새우",
+        "kind": "allergen",
+        "category": ""
+      },
+      {
+        "code": "allergen-pork",
+        "name": "돼지고기",
+        "kind": "allergen",
+        "category": ""
+      },
+      {
+        "code": "allergen-peach",
+        "name": "복숭아",
+        "kind": "allergen",
+        "category": ""
+      },
+      {
+        "code": "allergen-tomato",
+        "name": "토마토",
+        "kind": "allergen",
+        "category": ""
+      },
+      {
+        "code": "allergen-sulfites",
+        "name": "아황산류",
+        "kind": "allergen",
+        "category": ""
+      },
+      {
+        "code": "allergen-chicken",
+        "name": "닭고기",
+        "kind": "allergen",
+        "category": ""
+      },
+      {
+        "code": "allergen-beef",
+        "name": "쇠고기",
+        "kind": "allergen",
+        "category": ""
+      },
+      {
+        "code": "allergen-squid",
+        "name": "오징어",
+        "kind": "allergen",
+        "category": ""
+      },
+      {
+        "code": "allergen-shellfish",
+        "name": "조개류",
+        "kind": "allergen",
+        "category": ""
+      },
+      {
+        "code": "exclude-beef",
+        "name": "소고기",
+        "kind": "ingredient",
+        "category": "육류"
+      },
+      {
+        "code": "exclude-pork",
+        "name": "돼지고기",
+        "kind": "ingredient",
+        "category": "육류"
+      },
+      {
+        "code": "exclude-chicken",
+        "name": "닭고기",
+        "kind": "ingredient",
+        "category": "육류"
+      },
+      {
+        "code": "exclude-other-meat",
+        "name": "기타 육류",
+        "kind": "ingredient",
+        "category": "육류"
+      },
+      {
+        "code": "exclude-fish",
+        "name": "생선",
+        "kind": "ingredient",
+        "category": "해산물"
+      },
+      {
+        "code": "exclude-crustacean",
+        "name": "갑각류",
+        "kind": "ingredient",
+        "category": "해산물"
+      },
+      {
+        "code": "exclude-shellfish",
+        "name": "조개류",
+        "kind": "ingredient",
+        "category": "해산물"
+      },
+      {
+        "code": "exclude-egg",
+        "name": "달걀",
+        "kind": "ingredient",
+        "category": "달걀·유제품"
+      },
+      {
+        "code": "exclude-milk",
+        "name": "우유",
+        "kind": "ingredient",
+        "category": "달걀·유제품"
+      },
+      {
+        "code": "exclude-cheese-butter",
+        "name": "치즈·버터",
+        "kind": "ingredient",
+        "category": "달걀·유제품"
+      },
+      {
+        "code": "exclude-honey",
+        "name": "꿀",
+        "kind": "ingredient",
+        "category": "기타 동물성 재료"
+      },
+      {
+        "code": "exclude-gelatin",
+        "name": "젤라틴",
+        "kind": "ingredient",
+        "category": "기타 동물성 재료"
+      },
+      {
+        "code": "vegan",
+        "name": "비건",
+        "kind": "diet",
+        "category": ""
+      },
+      {
+        "code": "vegetarian",
+        "name": "락토오보 채식",
+        "kind": "diet",
+        "category": ""
+      }
+    ]
+  }
+}

@@ -1,0 +1,114 @@
+@import "tailwindcss";
+@config "../../tailwind.config.ts";
+
+@theme inline {
+  --color-primary: #2f7d5a;
+  --color-primary-light: #e7f3ec;
+  --color-primary-dark: #1a4d38;
+  --color-accent: #f59e42;
+  --color-accent-light: #fff1df;
+  --color-accent-text: #b8691a;
+  --color-background: #fafaf7;
+  --color-text: #252a27;
+  --color-muted: #737a76;
+  --color-error: #d94c4c;
+  --color-error-light: #fcebeb;
+  --color-card: #ffffff;
+  --color-shell: #e8ebe9;
+  --color-border: #eef1ef;
+  --color-border-strong: #e5e8e6;
+  --font-sans: "Pretendard", "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #e8ebe9;
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+:where(
+  button,
+  a[href],
+  [role="button"],
+  [role="option"],
+  [role="tab"],
+  [role="menuitem"],
+  [role="menuitemcheckbox"],
+  [role="menuitemradio"],
+  [role="switch"],
+  [role="checkbox"],
+  [role="radio"],
+  summary,
+  select,
+  label[for],
+  label:has(input:is([type="checkbox"], [type="radio"]):enabled),
+  input:is([type="button"], [type="submit"], [type="reset"], [type="checkbox"], [type="radio"], [type="range"])
+):not(:disabled):not([aria-disabled="true"]):not(.cursor-ns-resize):not(.cursor-grab):not(.cursor-grabbing) {
+  cursor: pointer;
+}
+
+:where(:disabled, [aria-disabled="true"], label:has(input:is([type="checkbox"], [type="radio"]):disabled)) {
+  cursor: not-allowed;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible),
+input:focus:not(:focus-visible),
+textarea:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.safe-bottom {
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes chat-thinking {
+  0%, 60%, 100% { transform: translateY(0); opacity: .4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+.chat-thinking-dot { animation: chat-thinking 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .chat-thinking-dot { animation: none; }
+}
+
+/* The staff card also colors the frame safe area and removes its white top gap. */
+html:has(.staff-view), body:has(.staff-view) { background: var(--color-primary-dark); }
+.app-frame:has(.staff-view) { background: var(--color-primary-dark); }
+.app-frame:has(.staff-view) > .app-content { padding-top: 0; }

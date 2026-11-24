@@ -48,8 +48,12 @@ def components(payload):
 
 @endpoint(['GET'])
 def session(request):
-    owner(request)
-    return JsonResponse({'csrf_token': get_token(request), 'identity': 'guest_session'})
+    profile = owner(request)
+    from .cache_identity import cache_identity
+    return JsonResponse({'csrf_token': get_token(request), 'identity': 'guest_session',
+                         'cache_identity': cache_identity(request),
+                         'profile': {'criteria': list(profile.criteria.exclude(kind='preference').values_list('code', flat=True)),
+                                     'setup_completed': profile.setup_completed}})
 
 
 @endpoint(['GET'])
@@ -94,7 +98,12 @@ def profile(request):
 @endpoint(['POST'])
 def judgement(request):
     mid = ids([request.payload['menu_id']])[0]
-    return JsonResponse(evaluate(owner(request), mid))
+    profile = owner(request)
+    context = EvaluationContext(profile)
+    context.prime([mid])
+    result = evaluate(profile, mid, context=context)
+    context.flush()
+    return JsonResponse(result)
 
 
 @endpoint(['POST'])
@@ -185,7 +194,16 @@ def reviews(request):
                 [code], output_field=BooleanField())
             qs = qs.alias(**{alias: expression}).filter(**{alias: True})
     selected, pagination = paginate(qs, page, limit)
-    return JsonResponse({'reviews': [review_json(r, guest_id) for r in selected], 'pagination': pagination})
+    rows = [review_json(r, guest_id) for r in selected]
+    if mine == 'true' and rows:
+        # Batch names only for the personal list; no per-review menu lookup.
+        from catalog.models import Menu
+        names = {mid: (name, restaurant) for mid, name, restaurant in Menu.objects.filter(
+            pk__in=[row['menu_id'] for row in rows]).values_list('pk', 'name', 'restaurant__name')}
+        for row in rows:
+            if row['menu_id'] in names:
+                row['menu_name'], row['restaurant_name'] = names[row['menu_id']]
+    return JsonResponse({'reviews': rows, 'pagination': pagination})
 
 
 @endpoint(['GET', 'PATCH', 'DELETE'])

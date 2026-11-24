@@ -1,5 +1,6 @@
 """External final CSV adapter; legacy CSV settings remain supported."""
 import math
+from functools import cached_property
 from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
@@ -83,7 +84,8 @@ class FinalCatalogRepository:
     def get_restaurant(self, restaurant_id):
         return next((r for r in self.list_restaurants() if r['restaurant_id'] == restaurant_id), None)
 
-    def list_menus(self):
+    @cached_property
+    def _menus(self):
         result = []
         for row in self.rows:
             try:
@@ -100,6 +102,9 @@ class FinalCatalogRepository:
                 'collected_at': row['데이터 수집일'], 'updated_at': row['갱신일'],
                 'branch_sale_status': 'unverified'})
         return result
+
+    def list_menus(self):
+        return list(self._menus)
 
     def list_restaurant_menus(self, restaurant_id):
         return [m for m in self.list_menus() if m['restaurant_id'] == restaurant_id]

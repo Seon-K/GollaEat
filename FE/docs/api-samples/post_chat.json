@@ -1,0 +1,38 @@
+{
+  "_meta": {
+    "method": "POST",
+    "path": "/api/chat",
+    "status": 200,
+    "ok": true,
+    "expectError": false,
+    "note": null,
+    "savedAt": "2026-11-22T08:44:34.830Z"
+  },
+  "body": {
+    "message": "현재 확인된 정보에서 식이 조건에 맞는 메뉴를 찾지 못했어요.\n검색 범위를 넓혀 보세요.",
+    "state": {
+      "radius_m": 1000,
+      "criteria": [
+        "allergen-milk",
+        "exclude-pork"
+      ],
+      "location": {
+        "lat": 36.78,
+        "lng": 127.05
+      },
+      "menu": "김밥",
+      "allergens": [
+        "우유"
+      ]
+    },
+    "result": {
+      "matched": [],
+      "needs_check": [],
+      "criteria": [
+        "allergen-milk",
+        "exclude-pork"
+      ],
+      "radius_m": 1000
+    }
+  }
+}

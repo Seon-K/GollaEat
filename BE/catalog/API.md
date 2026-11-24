@@ -1,5 +1,86 @@
 # 백엔드 A API 연동 계약
 
+## 식당 메뉴에서 검색어 일치 우선 정렬
+
+`GET /api/menus?restaurant_id=매장ID&menu_query=김밥&sort=dietary&page=1&limit=20`
+
+- `menu_query`: 선택 문자열, 앞뒤 공백 제거 후 최대 100자. 메뉴를 제외하지 않는 정렬 기준이다.
+- 메뉴명 정확 일치 → 부분 일치 → 나머지 순으로 전체 필터 결과를 정렬한 후 페이지를 나눈다.
+- 비교는 대소문자를 구분하지 않는다. 각 그룹 안에서는 기존 `sort` 순서를 유지한다.
+- `category`, `judgement_status`, 가격 등 기존 필터와 응답 형식은 유지한다.
+- 생략하거나 공백이면 기존 순서 그대로다. 기존 `q`는 계속 검색 필터로 작동한다.
+- 홈·지도 식당 메뉴 화면은 검색어를 `q` 대신 `menu_query`로 전달한다.
+
+## 지도 탐색 확장
+
+기존 매장 조회는 유지한다. `personalize`, `match_only`, `bounds` 중 하나가 있거나
+`sort=dietary`이면 지도 탐색 계약을 적용한다.
+
+```http
+GET /api/restaurants?personalize=true&match_only=true&lat=36.7898&lng=127.0017&radius_km=3&category=한식&max_price=10000&sort=dietary&page=1&limit=20
+GET /api/restaurants?personalize=true&bounds=126.99,36.78,127.02,36.81&lat=36.7898&lng=127.0017&sort=distance_asc
+```
+
+- `personalize=true|false`: 세션 프로필을 사용하는 개인화 요청. 기본 false.
+- `match_only=true|false`: 기본 false. true이면 personalize=true 필수.
+- `sort=dietary`: personalize=true 필수. 일치 메뉴 보유 여부 → 거리 → 식당 ID순.
+- `bounds=west,south,east,north`: 네 개의 유한 좌표, west < east, south < north.
+  경도 -180~180, 위도 -90~90, 각 축의 폭은 최대 2도. 경계 포함.
+- 지도 탐색 반경은 0 초과 100km 이하. bounds와 radius_km 동시 사용은 400.
+- lat/lng은 항상 쌍으로 전달. bounds와 같이 전달하면 검색 영역은 bounds,
+  거리 기준은 lat/lng. 좌표가 없으면 distance_km=null이며 거리순 요청은 400.
+- bounds/반경 조회에서 좌표 없는 식당은 제외. 지나치게 넓은 지도를 검색하면
+  bounds 오류를 반환하므로 확대 후 재검색한다.
+- 지도 탐색의 category는 메뉴 분류(빈 메뉴 분류는 매장 분류로 대체) 정확 일치.
+  홈 GET /api/menus의 category와 같은 의미다. 기존 일반 매장 조회의 매장 분류 필터는 유지.
+- q는 메뉴명·매장명·브랜드·주소 부분 검색. 가격 필터는 알려진 메뉴 가격에 적용.
+  category·가격·q를 통과한 같은 메뉴 집합으로 집계와 대표 메뉴를 계산한다.
+- 후보 매장 선별 → 메뉴 필터 → 일괄 판정 → 집계 → 일치 필터/정렬 → 페이지 처리.
+  가격순은 필터를 통과한 메뉴 중 최저 가격 기준, 미확인 가격은 마지막.
+
+기존 매장 필드에 다음 필드를 추가한다.
+
+```json
+{
+  "dietary_summary": {
+    "match_menu_count": 1,
+    "check_menu_count": 2,
+    "mismatch_menu_count": 0
+  },
+  "personalization": {"applied": true, "profile_configured": true},
+  "representative_menu": {
+    "menu_id": "menu-001",
+    "menu_name": "두부 비빔밥",
+    "restaurant": {"restaurant_id": "store-001", "restaurant_name": "식당"},
+    "category": "한식",
+    "distance_km": null,
+    "price": {"amount": 9000, "raw": "9000", "currency": "KRW", "status": "fixed"},
+    "branch_sale_status": "unverified",
+    "judgement": {"component_id": "menu-001", "status": "match"}
+  }
+}
+```
+
+대표 메뉴 judgement는 기존 evaluate의 전체 객체이며 위 예시는 일부 필드만 표시했다.
+대표 메뉴는 match → needs_check → mismatch → 메뉴 ID순으로 선정하고, 메뉴가 없으면 null.
+개인화 요청에서 식이조건이 없으면 applied=true, profile_configured=false이며 모든 등록 메뉴를 match로 집계한다.
+대표 메뉴 판정의 guidance.basis는 no_restrictions이며, 재료 확인 완료를 의미하지 않는다.
+개인화 미요청이면 applied=false이며 판정하지 않은 메뉴는 check로 집계하고 대표 메뉴 judgement는 null이다.
+메뉴가 없는 식당의 집계는 모두 0이다. match_only=true이면 이런 식당은 제외한다.
+check_menu_count는 서버 needs_check에 대응한다. 프론트에서는 기존 어댑터가 check로 변환한다.
+메뉴 일치는 식당 전체의 안전이나 지점 판매 확인을 의미하지 않는다.
+
+pagination은 기존 형식을 유지한다. 지도 마커는 불러온 목록만 표시하며
+pagination.total과 현재 표시 수를 함께 안내한다. 전체 영역 클러스터링은 제공하지 않는다.
+
+`GET /api/session`의 기존 identity 필드는 유지하고 cache_identity를 추가한다.
+API 응답의 X-GollaEat-Session 헤더는 같은 비인증용 세션 표식을 전달한다.
+이 값이 바뀌면 프론트는 진행 중 조회를 취소하고 캐시·서버 프로필을 갱신한다.
+API 응답은 Cache-Control: private, no-store를 사용한다.
+
+지도 표시는 기존 좌표를 사용한다. 주소 변환은 기존 관리자 검토 절차를 그대로 사용하며,
+지도 요청 시 자동 지오코딩하거나 카카오 장소 검색 결과를 식이조건 판정 데이터로 사용하지 않는다.
+
 모든 경로는 `/api` 기준, 끝 슬래시 없음. ID는 문자열이며 매장은 `place_id`, 메뉴는
 `preprocess_row_id`를 그대로 사용한다. 기본 조회는 Django ORM이다. CSV는 적재 명령에서만
 읽는다(기존 CSV 모드는 명시적으로 `CATALOG_USE_DB=false`일 때만 사용).
@@ -150,7 +231,7 @@ python manage.py import_menu_analysis --csv /external/menugen_backend_final.csv
 하위 성분의 포함은 상위 그룹에도 전달하지만, 불포함은 상위 그룹으로 추정하지 않는다.
 메뉴의 기본 구성품에 미확인 정보가 있으면 메뉴 전체의 불포함을 확정하지 않는다.
 명시적 불포함에도 미확인 범위가 있으면 `absent_tags`에 포함하지 않는다.
-현재 CSV는 검증된 근거를 제공하지 않으므로 초기 메뉴는 여전히 needs_check다.
+현재 CSV는 검증된 근거를 제공하지 않으므로 식이조건을 설정한 사용자의 초기 메뉴는 여전히 needs_check다.
 
 ## 정보 제보
 
@@ -307,5 +388,159 @@ category 생략·빈 값은 전체 조회, 반복 값은 중복 제거, 앞뒤 �
 B의 판정은 Qwen 추출·Gemini 추정의 제한 성분 일치 시 mismatch를 반환한다.
 AI 출처는 ai_evidence에서 확인하며 검증 sources와 분리한다.
 공식 프랜차이즈 메뉴 전체 알레르겐 목록의 조건·출처가 유효하면 미표시 알레르겐에 대해 match가 가능하다.
+match는 공식 표시 정보상 선택한 제한 성분이 기재되어 있지 않다는 뜻이며 섭취 안전성을 보장하지 않는다.
+개인화 judgement의 guidance(label/message/notice/basis)를 사용자 화면에 함께 표시한다.
+공식 목록 기준 안내: "공식 홈페이지의 알레르겐 정보에 선택한 제한 성분이 기재되어 있지 않습니다."
+추가 안내: "실제 포함 여부와 교차접촉 가능성은 주문 전 매장에 한 번 더 확인해 주세요."
+Gemini 추정 mismatch에는 포함 확정이 아닌 AI 추정에 따른 추천 제외라는 별도 안내를 반환한다.
 자세한 범위와 우선순위는 dietary/README.md의 정책 v2를 따른다.
 메뉴 상세에 personalize=true를 지정하면 공통 judgement와 saved를 추가한다.
+
+
+## 식당 선택 후 메뉴 조회
+
+`GET /api/menus`에 선택적 `restaurant_id`(최대 100자)를 추가한다.
+해당 식당의 메뉴를 먼저 선별한 뒤 기존 검색·카테고리·가격 필터, 정렬, 페이지 처리를 적용한다.
+`personalize=true`와 `sort=dietary`를 함께 사용할 수 있다.
+없는 식당은 HTTP 200과 빈 results를 반환한다. 기존 매장별 메뉴 조회 계약은 유지한다.
+
+```http
+GET /api/menus?restaurant_id=store-001&personalize=true&sort=dietary&page=1&limit=20
+```
+
+
+## 판정 상태 필터
+
+`GET /api/menus` 및 지도 탐색 `GET /api/restaurants`에
+`judgement_status=match|needs_check|mismatch`를 전달하면 판정 상태로 필터링한다.
+미전달 시 전체이며 프론트의 ‘추가 확인 필요’는 needs_check로 변환한다.
+음식 분류 및 가격 정렬과 조합할 수 있고, 필터 적용 이후에 페이지를 처리한다.
+매장 조회는 personalize=true가 필요하다. 선택 상태의 메뉴가 1개 이상인 식당을 반환하고,
+대표 메뉴와 가격 정렬 기준은 해당 상태의 메뉴에서 선택한다. 식당 집계는 음식/가격/검색
+조건을 통과한 전체 메뉴의 상태별 수를 유지한다.
+식이조건이 없는 프로필은 데이터 완전성과 무관하게 모든 메뉴를 match로 처리한다. needs_check/mismatch 필터는 빈 결과이며, match_only는 메뉴가 있는 식당만 포함한다.
+기존 match_only 파라미터는 호환성을 유지하되 needs_check/mismatch 필터와 동시 사용하면 400이다.
+
+
+## 아산시 범위와 판정 캐시
+
+앱의 홈·지도 요청은 region=아산시를 사용한다. 일반 API는 기존 region 선택 계약을 유지한다.
+메뉴 후보 및 지도 식당 후보의 DB 검색에 지역 조건을 우선 적용한다.
+PostgreSQL/autocommit에서 기존 EvaluationContext.prime/evaluate 결과를 조건·메뉴·DB snapshot별로
+최대 60초 캐시하고, 근거 만료 시점에는 더 일찍 무효화한다.
+DB 쓰기는 snapshot을 바꾸므로 캐시와 무관하게 반영된다. 트랜잭션·SQLite·CSV는 캐시를 우회한다.
+정렬·판정 필터·페이지 및 반환 계약은 유지한다.
+
+
+## Persistent dietary search index
+
+PostgreSQL uses `MenuDietaryState` (normalized search document, revision and expiry)
+and `MenuDietaryStatus` (menu/criterion status) to filter, sort and paginate in SQL.
+Statuses are generated by the existing `evaluate` engine; combined conditions use
+mismatch > needs_check > match, with missing evidence for configured conditions treated as needs_check.
+Only the selected page loads its versioned evaluator-data snapshot and runs the existing evaluator; original evidence relations are not re-read for every list request. API parameters and response fields remain compatible.
+Restaurant aggregation and representative selection use the same filtered menu candidates.
+An empty dietary profile matches every menu because no restrictions are selected; it does not confirm ingredients or store safety.
+
+Apply `python manage.py migrate`, then `python manage.py rebuild_dietary_index` before serving traffic.
+Migration `0011_fix_dietary_trigger_timestamp` also repairs PostgreSQL functions
+installed before the explicit timestamp cast was added to `0009`. Existing databases
+must run `migrate`; changing the migration source alone does not update stored functions.
+This repair replaces function bodies without deleting or rebuilding index rows.
+`--batch-size=1000` controls bounded evaluation batches; `--force` rebuilds all statuses.
+Catalog/allergen/analysis import commands rebuild dirty entries after successful writes.
+Database triggers invalidate affected menu revisions even for bulk/direct SQL changes;
+criterion/rule edits invalidate all entries. Run the rebuild command after bulk rule changes.
+Each menu expires at its own next source/declaration time boundary. Small dirty scopes
+(up to 100 menus) rebuild on demand. Large dirty scopes and unsupported legacy filters
+use the original evaluation path until rebuilt, preserving correctness during maintenance.
+Concurrent rebuilds lock states and only publish against matching revisions.
+Bump `ENGINE_VERSION` and rebuild when evaluator semantics change.
+
+`CATALOG_DIETARY_INDEX_ENABLED=auto` (default) enables the index on PostgreSQL after migration;
+`false` restores the previous path, `true` also enables SQLite for verification.
+CSV and custom repositories retain their existing behavior. This adds two derived tables
+and invalidation triggers; no spatial database or external service is required.
+The existing short-lived full-judgement cache remains available for legacy/detail paths.
+The snapshot includes evaluator inputs, not the original CSV/analysis payload. It is
+replaced only with a matching menu revision and is checked again before returning a page.
+
+
+PostgreSQL connection pooling is enabled by default (`psycopg[binary,pool]`).
+Each application process maintains 1..5 reusable connections; `CONN_MAX_AGE=0`
+returns borrowed connections at the end of a request. Set `DATABASE_POOL_ENABLED=false`
+to restore the prior persistent-connection configuration. Account for the number of
+worker processes when budgeting DB connections. No new environment variable is required.
+Reference: https://docs.djangoproject.com/en/5.2/ref/databases/#connection-pool
+
+
+### Final local measurements (2026-11-24)
+
+Same local development server / configured PostgreSQL / separate milk-condition guest:
+- Previous status-filter API: 11.069 / 12.266 / 12.824 / 10.941 seconds.
+- Indexed snapshots + connection pool, first request after restart: 3.187 seconds.
+- Subsequent menu filters: 1.625 / 1.868 / 1.346 seconds.
+- Counts unchanged: match 111, mismatch 989, needs_check 7,336.
+- Map bounds 126.8,36.6,127.3,37: 1.982 / 2.047 / 1.924 / 1.575 seconds;
+  result totals 14 / 110 / 356 / 14 respectively, with at most 20 rows per page.
+- Index coverage: 8,436 ready menu snapshots and 261,516 criterion statuses.
+These are single-environment observations, not latency guarantees. Remote DB round trips
+still contribute latency; colocating the deployed API and DB can reduce it further.
+
+
+Restaurant listing query refinement: the three dietary counts are projected together
+in one JSON aggregate. Dietary ordering uses a matching-menu existence check before
+pagination. Compact representative fields and a ready, non-expired evaluator snapshot
+are loaded together for only the selected page, avoiding separate menu/state reads.
+The response contract and pre-pagination status filtering remain unchanged.
+In the same local PostgreSQL profiling scenario (milk profile, Asan, 20 restaurants),
+warm service calls decreased from 7 SQL queries / 1.350..1.369s to 5 queries /
+0.879..0.924s. This excludes HTTP session/profile overhead and is not a latency guarantee.
+
+
+Personal review list: existing `GET /api/reviews?mine=true&page=N&limit=20`
+filters by the current session owner before pagination. Personal-list rows optionally
+include `menu_name` and `restaurant_name`, loaded with one batched catalog query;
+missing/deleted catalog entries retain their review without fabricated menu names.
+Public review and review-creation response contracts remain unchanged.
+
+
+## Card-only restaurant responses and bootstrap
+
+`GET /api/restaurants?view=card` is an opt-in lightweight response with restaurant_id,
+restaurant_name, address, latitude, longitude, distance_km, dietary_summary and
+personalization, plus unchanged pagination. It retains all existing search, category,
+price, dietary-status, bounds and sort semantics. Indexed card queries skip full
+restaurant serialization and representative-menu/evidence reads. `view=full` (default)
+preserves the previous response; unsupported views return the existing 400 error shape.
+Legacy/CSV repositories project the same card fields after their existing evaluation.
+
+`GET /api/session` now additionally returns `profile: {criteria, setup_completed}` for
+the current session. Existing CSRF/identity fields are unchanged. Session/private-cache
+behavior and profile-update endpoints remain unchanged; no new environment variables.
+
+
+Local bootstrap/card verification (same separate guest and Vite proxy path):
+- Prior session -> profile -> full restaurants: 2.497..2.553 seconds.
+- Combined session/profile -> card restaurants: 1.521..1.548 seconds warm;
+  first sequence after the final server restart: 2.198 seconds.
+- Restaurant response decreased from 75,847 to 10,149 bytes for 20 rows.
+Hangul-only region searches use direct containment (Hangul has no case mapping),
+avoiding construction of the complete Unicode fold mapping on Asan's first request;
+other region searches keep exact Unicode folding. These are API-sequence timings,
+not browser render/load guarantees; remote DB/network latency remains.
+
+
+## Menu display reads and detail judgement latency
+
+`GET /api/menus/{id}?view=display` preserves the menu detail fields while returning
+`analysis_reference: null`. The database reader skips the analysis join/payload and
+unused restaurant source JSON. The default `view=full` contract is unchanged;
+unknown views return the existing invalid-query error structure.
+
+`POST /api/judgements` primes its evaluator with ready, versioned, unexpired stored
+menu facts when available. It still evaluates the current session profile using the
+existing engine. Dirty, missing or expired snapshots fall back to source evidence.
+Unconfigured plain restaurant-card requests skip unnecessary dietary-index rebuilding.
+Single-criterion indexed ranks use the unique menu/criterion lookup directly.
+These changes require no schema migration or new environment variables.

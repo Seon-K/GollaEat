@@ -1,0 +1,18 @@
+{
+  "_meta": {
+    "method": "GET",
+    "path": "/api/profile",
+    "status": 200,
+    "ok": true,
+    "expectError": false,
+    "note": null,
+    "savedAt": "2026-11-22T08:43:31.593Z"
+  },
+  "body": {
+    "criteria": [
+      "allergen-milk",
+      "exclude-pork"
+    ],
+    "setup_completed": true
+  }
+}

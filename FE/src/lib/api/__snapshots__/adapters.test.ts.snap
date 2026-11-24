@@ -1,0 +1,243 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`adapters from api-samples > snapshot: judgement / menus / menu detail / restaurant / chat 1`] = `
+{
+  "chat": {
+    "criteria": [
+      "allergen-milk",
+      "exclude-pork",
+    ],
+    "matched": [],
+    "message": "현재 확인된 정보에서 식이 조건에 맞는 메뉴를 찾지 못했어요.
+검색 범위를 넓혀 보세요.",
+    "needsCheck": [],
+    "placeCandidates": [],
+    "question": null,
+    "radiusM": 1000,
+    "state": {
+      "allergens": [
+        "우유",
+      ],
+      "criteria": [
+        "allergen-milk",
+        "exclude-pork",
+      ],
+      "location": {
+        "lat": 36.78,
+        "lng": 127.05,
+      },
+      "menu": "김밥",
+      "radius_m": 1000,
+    },
+  },
+  "detail": {
+    "allergenInformation": {
+      "allergens_contains_normalized": null,
+      "brand_reference": null,
+      "declarations": [],
+    },
+    "category": "카페",
+    "components": [],
+    "distanceKm": null,
+    "id": "menus_008023",
+    "lat": 36.7908840061374,
+    "lng": 126.955716574904,
+    "name": "(6팩)버라이어티팩",
+    "optionGroups": [],
+    "phone": null,
+    "priceAmount": 28800,
+    "restaurantId": "1156290732",
+    "restaurantName": "배스킨라빈스 아산신창",
+  },
+  "judgement": {
+    "componentId": "menus_008023",
+    "name": undefined,
+    "preferenceScore": 0,
+    "problemIngredients": [],
+    "reasons": [
+      {
+        "conditionCode": "allergen-milk",
+        "detail": "포함 정보 없음 · 재료 정보 확인",
+        "label": "우유",
+        "ruleSource": "GollaEat 성분 태그 계약 v1: milk",
+        "status": "check",
+        "unknownItems": [
+          "우유",
+        ],
+      },
+      {
+        "conditionCode": "exclude-pork",
+        "detail": "포함 정보 없음 · 재료 정보 확인",
+        "label": "돼지고기",
+        "ruleSource": "GollaEat 성분 태그 계약 v1: pork",
+        "status": "check",
+        "unknownItems": [
+          "돼지고기",
+        ],
+      },
+    ],
+    "role": undefined,
+    "sortKey": [
+      1,
+      0,
+      "menus_008023",
+    ],
+    "sources": [],
+    "status": "check",
+    "unknownItems": [
+      "우유",
+      "돼지고기",
+    ],
+    "unknownMessages": [
+      "우유 포함 여부 확인 필요",
+      "우유 관련 정보 출처 확인 필요",
+      "돼지고기 포함 여부 확인 필요",
+      "돼지고기 관련 정보 출처 확인 필요",
+    ],
+  },
+  "menuItems": [
+    {
+      "category": "카페",
+      "currency": "KRW",
+      "distanceKm": null,
+      "id": "menus_008023",
+      "judgement": {
+        "componentId": "menus_008023",
+        "name": undefined,
+        "preferenceScore": 0,
+        "problemIngredients": [],
+        "reasons": [
+          {
+            "conditionCode": "allergen-milk",
+            "detail": "포함 정보 없음 · 재료 정보 확인",
+            "label": "우유",
+            "ruleSource": "GollaEat 성분 태그 계약 v1: milk",
+            "status": "check",
+            "unknownItems": [
+              "우유",
+            ],
+          },
+          {
+            "conditionCode": "exclude-pork",
+            "detail": "포함 정보 없음 · 재료 정보 확인",
+            "label": "돼지고기",
+            "ruleSource": "GollaEat 성분 태그 계약 v1: pork",
+            "status": "check",
+            "unknownItems": [
+              "돼지고기",
+            ],
+          },
+        ],
+        "role": undefined,
+        "sortKey": [
+          1,
+          0,
+          "menus_008023",
+        ],
+        "sources": [],
+        "status": "check",
+        "unknownItems": [
+          "우유",
+          "돼지고기",
+        ],
+        "unknownMessages": [
+          "우유 포함 여부 확인 필요",
+          "우유 관련 정보 출처 확인 필요",
+          "돼지고기 포함 여부 확인 필요",
+          "돼지고기 관련 정보 출처 확인 필요",
+        ],
+      },
+      "lat": 36.7908840061374,
+      "lng": 126.955716574904,
+      "name": "(6팩)버라이어티팩",
+      "priceAmount": 28800,
+      "restaurantId": "1156290732",
+      "restaurantName": "배스킨라빈스 아산신창",
+      "saved": false,
+    },
+    {
+      "category": "카페",
+      "currency": "KRW",
+      "distanceKm": null,
+      "id": "menus_008024",
+      "judgement": {
+        "componentId": "menus_008024",
+        "name": undefined,
+        "preferenceScore": 0,
+        "problemIngredients": [],
+        "reasons": [
+          {
+            "conditionCode": "allergen-milk",
+            "detail": "포함 정보 없음 · 재료 정보 확인",
+            "label": "우유",
+            "ruleSource": "GollaEat 성분 태그 계약 v1: milk",
+            "status": "check",
+            "unknownItems": [
+              "우유",
+            ],
+          },
+          {
+            "conditionCode": "exclude-pork",
+            "detail": "포함 정보 없음 · 재료 정보 확인",
+            "label": "돼지고기",
+            "ruleSource": "GollaEat 성분 태그 계약 v1: pork",
+            "status": "check",
+            "unknownItems": [
+              "돼지고기",
+            ],
+          },
+        ],
+        "role": undefined,
+        "sortKey": [
+          1,
+          0,
+          "menus_008024",
+        ],
+        "sources": [],
+        "status": "check",
+        "unknownItems": [
+          "우유",
+          "돼지고기",
+        ],
+        "unknownMessages": [
+          "우유 포함 여부 확인 필요",
+          "우유 관련 정보 출처 확인 필요",
+          "돼지고기 포함 여부 확인 필요",
+          "돼지고기 관련 정보 출처 확인 필요",
+        ],
+      },
+      "lat": 36.7908840061374,
+      "lng": 126.955716574904,
+      "name": "(8팩) 버라이어티팩",
+      "priceAmount": 38400,
+      "restaurantId": "1156290732",
+      "restaurantName": "배스킨라빈스 아산신창",
+      "saved": false,
+    },
+  ],
+  "pagination": {
+    "count": 5,
+    "limit": 5,
+    "nextPage": 2,
+    "page": 1,
+    "previousPage": null,
+    "total": 8436,
+    "totalPages": 1688,
+  },
+  "restaurant": {
+    "address": "충청남도 아산시 배방읍 배방로14번길 10 1층 스시초연",
+    "distanceKm": 0.5662379432621278,
+    "id": "1233189555",
+    "lat": 36.7755993,
+    "lng": 127.053199,
+    "map": {
+      "kakaoDirectionsUrl": "https://map.kakao.com/link/to/%EC%8A%A4%EC%8B%9C%EC%B4%88%EC%97%B0,36.7755993,127.053199",
+      "kakaoMapUrl": "https://map.kakao.com/link/map/%EC%8A%A4%EC%8B%9C%EC%B4%88%EC%97%B0,36.7755993,127.053199",
+      "mapUrl": "https://m.place.naver.com/restaurant/1233189555/home",
+      "walkingDirectionsUrl": "https://map.kakao.com/link/by/walk/%EC%B6%9C%EB%B0%9C%EC%A7%80,36.78,127.05/%EC%8A%A4%EC%8B%9C%EC%B4%88%EC%97%B0,36.7755993,127.053199",
+    },
+    "name": "스시초연",
+    "phone": "0507-1388-2141",
+  },
+}
+`;

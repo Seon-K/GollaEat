@@ -52,4 +52,7 @@ class Command(BaseCommand):
                             'source': source, 'confirmed_at': checked if eligible else None,
                             'applicability_scope': 'brand_menu_reference:' + row['allergen_declaration_scope'],
                             'unknown_scope': '지점별 현재 판매·레시피 변경·교차접촉·전체 성분 범위는 미확인'})
+        from catalog.dietary_index import rebuild_after_import
+        if not options['dry_run']:
+            rebuild_after_import()
         self.stdout.write(json.dumps(dict(stats), ensure_ascii=False, sort_keys=True))

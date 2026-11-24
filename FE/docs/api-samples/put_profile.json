@@ -1,0 +1,18 @@
+{
+  "_meta": {
+    "method": "PUT",
+    "path": "/api/profile",
+    "status": 200,
+    "ok": true,
+    "expectError": false,
+    "note": "criteria ids from user probe instruction",
+    "savedAt": "2026-11-22T08:43:30.529Z"
+  },
+  "body": {
+    "criteria": [
+      "allergen-milk",
+      "exclude-pork"
+    ],
+    "setup_completed": true
+  }
+}

@@ -49,4 +49,6 @@ class Command(BaseCommand):
                 Menu.objects.update_or_create(pk=item['menu_id'], defaults={
                     'restaurant_id': item['restaurant_id'], 'name': item['menu_name'],
                     'price_amount': item['price_amount'], 'description': item.get('description') or '', 'data': item})
+        from catalog.dietary_index import rebuild_after_import
+        rebuild_after_import()
         self.stdout.write(self.style.SUCCESS(f'Upserted {len(restaurants)} restaurants, {len(menus)} menus; no deletions'))

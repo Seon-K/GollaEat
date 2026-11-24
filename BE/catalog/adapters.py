@@ -12,6 +12,12 @@ class DietaryCatalog:
         if settings.CATALOG_USE_DB:
             from .db_repository import DatabaseCatalogRepository
             return DatabaseCatalogRepository().get_dietary_components(menu_ids)
+        if settings.CATALOG_FINAL_CSV:
+            from .final_repository import get_repository
+            available = {m['menu_id'] for m in get_repository().list_menus()}
+            return {mid: {'present_tags': [], 'absent_tags': [], 'sources': [],
+                          'preference_tags': []} if mid in available else None
+                    for mid in menu_ids}
         return {mid: self.get_component(mid) for mid in menu_ids}
 
     # Only reviewed declarations are eligible; structure checks alone are not proof.
