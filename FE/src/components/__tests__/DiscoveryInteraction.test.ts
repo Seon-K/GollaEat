@@ -48,6 +48,17 @@ describe("filter pointer lifecycle", () => {
 });
 
 describe("map sheet heights and dropdown direction", () => {
+  it("keeps search progress visible when only the collapsed title remains", () => {
+    vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
+    const props = { expanded: false, controlsHeight: 120, onHeightChange: vi.fn(),
+      title: "이 지도에서 추천하는 식당", subtitle: "총 86곳", children: h("p", null, "식당 목록") };
+    const view = render(h(MapResultsSheet, { ...props, loading: true }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "식당 목록 높이 조절" }), { key: "Home" });
+    expect(screen.queryByText("총 86곳")).toBeNull();
+    expect(screen.getByRole("status", { name: "식당 탐색 중" })).toBeTruthy();
+    view.rerender(h(MapResultsSheet, { ...props, loading: false }));
+    expect(screen.queryByRole("status", { name: "식당 탐색 중" })).toBeNull();
+  });
   it("collapses to its title and opens filters downwards when raised", () => {
     vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
     render(h(MapResultsSheet, { expanded: false, controlsHeight: 120, onHeightChange: vi.fn(),
