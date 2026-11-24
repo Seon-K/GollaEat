@@ -15,6 +15,7 @@ import { Chip } from "@/components/Chip";
 import { Disclaimer } from "@/components/Disclaimer";
 import { MenuCard } from "@/components/MenuCard";
 import { Mascot } from "@/components/Mascot";
+import { ChatThinking } from "@/components/ChatThinking";
 import { Toast } from "@/components/Toast";
 import { allergenLabel } from "@/data/allergens";
 import { restrictionLabel } from "@/data/restrictions";
@@ -482,7 +483,7 @@ export default function AiPage() {
             </button>
           ) : null}
           {sending ? (
-            <p className="text-center text-[13px] text-muted">답변 준비 중…</p>
+            <ChatThinking />
           ) : null}
         </div>
       </div>
