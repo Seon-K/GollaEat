@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -20,6 +20,7 @@ import { allergenLabel } from "@/data/allergens";
 import { restrictionLabel } from "@/data/restrictions";
 import { SCH_ORIGIN } from "@/data/mock";
 import { useGeolocation } from "@/hooks/chatbot/useGeolocation";
+import { LocationError } from "@/hooks/useGeolocation";
 import { useFavorites } from "@/hooks/useFavoriteToggle";
 import type {
   ChatMenuHitUi,
@@ -193,6 +194,8 @@ export default function AiPage() {
   const allergens = useProfileStore((s) => s.allergens);
   const restrictions = useProfileStore((s) => s.restrictions);
   const geo = useGeolocation();
+  const locationDialog = useRef<HTMLDialogElement>(null);
+  const [locationPrompt, setLocationPrompt] = useState<"request" | "pending" | "denied" | "unavailable">("request");
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sending, setSending] = useState(false);
@@ -300,19 +303,34 @@ export default function AiPage() {
     void send(`${candidate.name} 근처`, { location: candidate.location });
   };
 
-  const sendSuggestedQuestion = (question: string) => {
-    if (question !== CURRENT_LOCATION_QUESTION) {
+  const submitQuestion = (question: string) => {
+    if (question.trim() !== CURRENT_LOCATION_QUESTION) {
       void send(question);
       return;
     }
-    if (!geo.location.isGps) {
-      setToast(geo.status === "pending"
-        ? "현재 위치를 확인 중이에요. 잠시 후 다시 눌러 주세요."
-        : "현재 위치를 사용할 수 없어요. 위치 권한을 확인하거나 장소 이름으로 검색해 주세요.");
-      return;
+    if (sending) return;
+    if (geo.location.isGps) {
+      const { lat, lng } = geo.location;
+      void send(CURRENT_LOCATION_QUESTION, { location: { lat, lng } });
+    } else if (geo.status === "pending") {
+      setToast("현재 위치를 확인 중이에요. 잠시 후 다시 눌러 주세요.");
+    } else {
+      setLocationPrompt("request");
+      locationDialog.current?.showModal();
     }
-    const { lat, lng } = geo.location;
-    void send(question, { location: { lat, lng } });
+  };
+
+  const retryLocation = async () => {
+    setLocationPrompt("pending");
+    try {
+      const { lat, lng } = await geo.refresh();
+      if (!locationDialog.current?.open) return;
+      locationDialog.current.close();
+      void send(CURRENT_LOCATION_QUESTION, { location: { lat, lng } });
+    } catch (error) {
+      if (!locationDialog.current?.open) return;
+      setLocationPrompt(error instanceof LocationError && error.status === "denied" ? "denied" : "unavailable");
+    }
   };
 
   return (
@@ -384,7 +402,7 @@ export default function AiPage() {
                     key={s}
                     type="button"
                     disabled={sending}
-                    onClick={() => sendSuggestedQuestion(s)}
+                    onClick={() => submitQuestion(s)}
                     className="flex w-full touch-target items-center justify-between rounded-2xl border border-[#eef1ef] bg-card px-4 py-3.5 text-left text-[14px] text-text disabled:opacity-50"
                   >
                     <span className="pr-2">{s}</span>
@@ -475,7 +493,7 @@ export default function AiPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") void send(input);
+              if (e.key === "Enter") submitQuestion(input);
             }}
             placeholder={
               activePlaceCandidates.length > 0
@@ -489,7 +507,7 @@ export default function AiPage() {
           <button
             type="button"
             disabled={sending || !input.trim()}
-            onClick={() => void send(input)}
+            onClick={() => submitQuestion(input)}
             className="inline-flex size-12 items-center justify-center rounded-full bg-primary text-white touch-target disabled:opacity-40"
             aria-label="전송"
           >
@@ -501,6 +519,33 @@ export default function AiPage() {
         </div>
       </div>
 
+      <dialog
+        ref={locationDialog}
+        aria-labelledby="chat-location-title"
+        aria-describedby="chat-location-description"
+        onCancel={(event) => { if (locationPrompt === "pending") event.preventDefault(); }}
+        className="m-auto w-[calc(100%-2rem)] max-w-sm rounded-2xl bg-card p-5 text-text shadow-lg backdrop:bg-black/40"
+      >
+        <h2 id="chat-location-title" className="text-base font-bold">현재 위치 사용</h2>
+        <p id="chat-location-description" aria-live="polite" className="mt-2 text-sm leading-relaxed text-muted">
+          {locationPrompt === "request" && "내 위치 주변 메뉴를 찾으려면 위치 권한을 허용해 주세요."}
+          {locationPrompt === "pending" && "현재 위치를 확인하고 있어요."}
+          {locationPrompt === "denied" && "위치 권한이 꺼져 있어요. 브라우저의 사이트 설정에서 위치를 허용하거나, 장소 이름으로 검색해 주세요."}
+          {locationPrompt === "unavailable" && "현재 위치를 가져오지 못했어요. 기기의 위치 설정을 확인하거나, 장소 이름으로 검색해 주세요."}
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" disabled={locationPrompt === "pending"} onClick={() => locationDialog.current?.close()}
+            className="touch-target rounded-full px-4 text-sm font-semibold text-muted disabled:opacity-50">
+            {locationPrompt === "request" || locationPrompt === "pending" ? "취소" : "닫기"}
+          </button>
+          {(locationPrompt === "request" || locationPrompt === "pending") && (
+            <button type="button" disabled={locationPrompt === "pending"} onClick={() => void retryLocation()}
+              className="touch-target rounded-full bg-primary px-4 text-sm font-semibold text-white disabled:opacity-50">
+              위치 권한 요청
+            </button>
+          )}
+        </div>
+      </dialog>
       <Toast message={toast ?? ""} visible={Boolean(toast)} />
     </main>
   );
