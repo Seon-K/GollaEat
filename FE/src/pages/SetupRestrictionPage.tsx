@@ -40,7 +40,7 @@ function RestrictionSetupContent() {
           재료가 있나요?
         </h1>
         <p className="mt-2 text-[14px] leading-relaxed text-muted">
-          채식이나 개인적인 식습관 때문에 먹지 않는 재료를 선택해 주세요.
+          서버에서 지원하는 제한 재료 {RESTRICTIONS.length}종 중 먹지 않는 항목을 선택해 주세요.
         </p>
       </div>
 

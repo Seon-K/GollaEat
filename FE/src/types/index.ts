@@ -8,7 +8,7 @@ export type AllergenId =
   | "egg"
   | "milk"
   | "buckwheat"
-  | "peanut"
+  | "nuts"
   | "soy"
   | "wheat"
   | "mackerel"
@@ -17,13 +17,11 @@ export type AllergenId =
   | "pork"
   | "peach"
   | "tomato"
-  | "sulfite"
-  | "walnut"
+  | "sulfites"
   | "chicken"
   | "beef"
   | "squid"
-  | "shellfish"
-  | "pinenut";
+  | "shellfish";
 
 export type RestrictionId =
   | "beef"
@@ -37,13 +35,12 @@ export type RestrictionId =
   | "milk"
   | "cheese_butter"
   | "honey"
-  | "gelatin"
-  | "animal_broth";
+  | "gelatin";
 
 export type RestrictionCategory =
   | "육류"
   | "해산물"
-  | "달걀 · 유제품"
+  | "달걀·유제품"
   | "기타 동물성 재료";
 
 export interface Allergen {

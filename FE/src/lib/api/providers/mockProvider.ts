@@ -1,3 +1,4 @@
+import { criteriaCodesToProfile } from "@/lib/api/criteriaMap";
 /**
  * mock 모드 — 기존 /src/data + lib/judge.ts 만 사용 (서버 판정 없음)
  */
@@ -12,8 +13,8 @@ import {
   type RestaurantUi,
 } from "@/lib/api/adapters";
 import { MENUS, SCH_ORIGIN, STORES } from "@/data/mock";
-import { allergenLabel } from "@/data/allergens";
-import { restrictionLabel } from "@/data/restrictions";
+import { ALLERGENS } from "@/data/allergens";
+import { RESTRICTIONS } from "@/data/restrictions";
 import { distanceFrom } from "@/lib/geo";
 import { judgeMenu, reasonResultToTone } from "@/lib/judge";
 import type { DataProvider } from "@/lib/api/providers/types";
@@ -35,61 +36,7 @@ let reviewSeq = 1;
 let reportSeq = 1;
 
 function profileFromCriteria(codes: string[]): DietProfile {
-  const allergens: DietProfile["allergens"] = [];
-  const restrictions: DietProfile["restrictions"] = [];
-  for (const code of codes) {
-    if (code.startsWith("allergen-")) {
-      const id = code.replace("allergen-", "") as DietProfile["allergens"][number];
-      // mock: peanut/milk/shrimp 등 로컬 id 와 다를 수 있음 — 알려진 것만
-      if (
-        [
-          "egg",
-          "milk",
-          "buckwheat",
-          "peanut",
-          "soy",
-          "wheat",
-          "mackerel",
-          "crab",
-          "shrimp",
-          "pork",
-          "peach",
-          "tomato",
-          "sulfite",
-          "walnut",
-          "chicken",
-          "beef",
-          "squid",
-          "shellfish",
-          "pinenut",
-        ].includes(id)
-      ) {
-        allergens.push(id);
-      }
-    } else if (code.startsWith("exclude-")) {
-      const id = code.replace("exclude-", "") as DietProfile["restrictions"][number];
-      if (
-        [
-          "beef",
-          "pork",
-          "chicken",
-          "other_meat",
-          "fish",
-          "crustacean",
-          "shellfish",
-          "egg",
-          "milk",
-          "cheese_butter",
-          "honey",
-          "gelatin",
-          "animal_broth",
-        ].includes(id)
-      ) {
-        restrictions.push(id);
-      }
-    }
-  }
-  return { allergens, restrictions };
+  return criteriaCodesToProfile(codes);
 }
 
 function emptyPagination(count: number): PaginationUi {
@@ -153,18 +100,10 @@ export const mockProvider: DataProvider = {
 
   async getDietaryCriteria(): Promise<ApiDietaryCriterion[]> {
     return [
-      {
-        code: "allergen-milk",
-        name: allergenLabel("milk"),
-        kind: "allergen",
-        category: "",
-      },
-      {
-        code: "exclude-pork",
-        name: restrictionLabel("pork"),
-        kind: "restriction",
-        category: "육류",
-      },
+      ...ALLERGENS.map(({ id, label }) => ({ code: `allergen-${id}`, name: label, kind: "allergen", category: "" })),
+      ...RESTRICTIONS.map(({ id, label, category }) => ({
+        code: `exclude-${id.replaceAll("_", "-")}`, name: label, kind: "ingredient", category,
+      })),
     ];
   },
 

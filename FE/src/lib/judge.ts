@@ -1,4 +1,4 @@
-import { allergenLabel } from "@/data/allergens";
+import { allergenLabel, allergenSearchLabels } from "@/data/allergens";
 import {
   RESTRICTION_EXPANSION,
   restrictionLabel,
@@ -23,7 +23,7 @@ export function expandProfileTokens(profile: DietProfile): string[] {
   const tokens = new Set<string>();
 
   profile.allergens.forEach((id) => {
-    tokens.add(normalize(allergenLabel(id)));
+    allergenSearchLabels(id).forEach((label) => tokens.add(normalize(label)));
     tokens.add(normalize(id));
   });
 
@@ -74,36 +74,12 @@ function reasonForCondition(
   return { condition, result: "포함 정보 없음 · 재료 정보 확인" };
 }
 
-function brothReason(menu: Menu): JudgementReason | null {
-  const hasBrothUnconfirmed = menu.unconfirmed.some((u) =>
-    normalize(u).includes("육수"),
-  );
-  const pool = [...menu.confirmedIngredients, ...menu.confirmedAllergens];
-  const brothInPool = poolHits(pool, [
-    "동물성육수",
-    "육수",
-    "사골",
-    "닭육수",
-  ]);
-
-  if (brothInPool.length > 0) {
-    return { condition: "동물성 육수", result: "포함 확인됨" };
-  }
-  if (!menu.hasIngredientInfo) {
-    return { condition: "동물성 육수", result: "정보 없음" };
-  }
-  if (hasBrothUnconfirmed) {
-    // 미확인 육수 — 조건별 비교에서는 정보 부재로 표기
-    return { condition: "동물성 육수", result: "정보 없음" };
-  }
-  return { condition: "동물성 육수", result: "사용하지 않는 것으로 확인" };
-}
-
 /**
  * 메뉴 × 식이 프로필 판정
  * 우선순위: mismatch > check > match
  */
 export function judgeMenu(menu: Menu, profile: DietProfile): Judgement {
+  if (!profile.allergens.length && !profile.restrictions.length) return { status: "match", reasons: [] };
   const tokens = expandProfileTokens(profile);
   const pool = [...menu.confirmedIngredients, ...menu.confirmedAllergens];
   const restrictedHits = poolHits(pool, tokens);
@@ -120,29 +96,16 @@ export function judgeMenu(menu: Menu, profile: DietProfile): Judgement {
   profile.allergens.forEach((id: AllergenId) => {
     const label = allergenLabel(id);
     reasons.push(
-      reasonForCondition(label, menu, conditionTokens(label)),
+      reasonForCondition(label, menu, allergenSearchLabels(id).map(normalize)),
     );
   });
 
   profile.restrictions.forEach((id: RestrictionId) => {
-    if (id === "animal_broth") {
-      const broth = brothReason(menu);
-      if (broth) reasons.push(broth);
-      return;
-    }
     const label = restrictionLabel(id);
     reasons.push(
       reasonForCondition(label, menu, conditionTokens(label, id)),
     );
   });
-
-  // 프로필에 육수 제한이 없어도 판정 화면용으로 육수 근거를 한 줄 보강
-  if (!profile.restrictions.includes("animal_broth")) {
-    const broth = brothReason(menu);
-    if (broth && !reasons.some((r) => r.condition === "동물성 육수")) {
-      reasons.push(broth);
-    }
-  }
 
   // mismatch 시 해당 조건 결과는 반드시 "포함 확인됨"
   if (status === "mismatch") {

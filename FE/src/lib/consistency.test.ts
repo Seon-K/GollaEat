@@ -15,7 +15,7 @@ function statusesFor(profile: DietProfile) {
 }
 
 describe("프로필 변경 시 목록·AI 일관성", () => {
-  it("땅콩 해제해도 토마토 파스타는 새우·우유로 mismatch 유지", () => {
+  it("견과류 해제해도 토마토 파스타는 새우·우유로 mismatch 유지", () => {
     const profile: DietProfile = {
       allergens: ["milk", "shrimp"],
       restrictions: [...DEMO_PROFILE.restrictions],
@@ -27,7 +27,7 @@ describe("프로필 변경 시 목록·AI 일관성", () => {
 
   it("토마토 추가 시 explore 판정과 AI search 상태가 같다", () => {
     const profile: DietProfile = {
-      allergens: ["peanut", "milk", "shrimp", "tomato"],
+      allergens: ["nuts", "milk", "shrimp", "tomato"],
       restrictions: [...DEMO_PROFILE.restrictions],
     };
     const explore = statusesFor(profile);

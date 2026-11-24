@@ -176,7 +176,7 @@ function detectRemovedAllergens(text: string): AllergenId[] {
 
   const candidates: Array<{ id: AllergenId; keys: string[] }> = [
     { id: "shrimp", keys: ["새우"] },
-    { id: "peanut", keys: ["땅콩"] },
+    { id: "nuts", keys: ["견과류", "땅콩", "호두", "잣"] },
     { id: "milk", keys: ["우유"] },
     { id: "egg", keys: ["난류", "달걀", "계란"] },
     { id: "wheat", keys: ["밀"] },
@@ -214,7 +214,6 @@ function detectRemovedRestrictions(text: string): RestrictionId[] {
     { id: "beef", keys: ["소고기", "쇠고기"] },
     { id: "pork", keys: ["돼지고기"] },
     { id: "chicken", keys: ["닭고기"] },
-    { id: "animal_broth", keys: ["동물성육수", "육수"] },
   ];
   return map
     .filter((m) => m.keys.some((k) => t.includes(k)))

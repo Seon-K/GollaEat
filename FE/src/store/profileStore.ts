@@ -1,3 +1,5 @@
+import { normalizeRestrictionIds } from "@/data/restrictions";
+import { normalizeAllergenIds } from "@/data/allergens";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { DEMO_PROFILE } from "@/data/mock";
@@ -29,14 +31,14 @@ export const useProfileStore = create<ProfileState>()(
             ? s.allergens.filter((a) => a !== id)
             : [...s.allergens, id],
         })),
-      setAllergens: (ids) => set({ allergens: ids }),
+      setAllergens: (ids) => set({ allergens: normalizeAllergenIds(ids) }),
       toggleRestriction: (id) =>
         set((s) => ({
           restrictions: s.restrictions.includes(id)
             ? s.restrictions.filter((r) => r !== id)
             : [...s.restrictions, id],
         })),
-      setRestrictions: (ids) => set({ restrictions: ids }),
+      setRestrictions: (ids) => set({ restrictions: normalizeRestrictionIds(ids) }),
       saveProfile: () => set({ completed: true }),
       getProfile: () => ({
         allergens: get().allergens,
@@ -53,6 +55,12 @@ export const useProfileStore = create<ProfileState>()(
     }),
     {
       name: "gollaeat-profile",
+      merge: (persisted, current) => {
+        const saved = persisted as Partial<ProfileState> | undefined;
+        return { ...current, ...saved,
+          allergens: normalizeAllergenIds(Array.isArray(saved?.allergens) ? saved.allergens : current.allergens),
+          restrictions: normalizeRestrictionIds(Array.isArray(saved?.restrictions) ? saved.restrictions : current.restrictions) };
+      },
       partialize: (state) => ({
         allergens: state.allergens,
         restrictions: state.restrictions,
