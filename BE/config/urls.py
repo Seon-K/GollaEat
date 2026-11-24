@@ -20,6 +20,7 @@ from .views import health
 from chatbot.views import chat_view
 
 urlpatterns = [
+    path('api/manage/', include('config.manage_urls')),
     path('api/chat', chat_view),
     path('api/', include('catalog.urls')),
     path('api/', include('dietary.urls')),

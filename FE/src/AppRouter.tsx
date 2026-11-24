@@ -4,7 +4,9 @@ import {
   Route,
   Routes,
   useParams,
+  useLocation,
 } from "react-router-dom";
+import { lazy, Suspense, type ReactNode } from "react";
 import SplashPage from "@/pages/SplashPage";
 import OnboardingPage from "@/pages/OnboardingPage";
 import SetupAllergenPage from "@/pages/SetupAllergenPage";
@@ -21,6 +23,15 @@ import MenuReportPage from "@/pages/MenuReportPage";
 import ShowStaffPage from "@/pages/ShowStaffPage";
 import DesignSystemPage from "@/pages/DesignSystemPage";
 import { SessionGate } from "@/components/SessionGate";
+import { PhoneFrame } from "@/components/PhoneFrame";
+import { ManageRouteSkeleton } from "@/admin/ManageSkeleton";
+
+const ManageApp = lazy(() => import("@/admin/ManageApp"));
+function UserSessionBoundary({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
+  if (pathname === '/manage' || pathname.startsWith('/manage/')) return children;
+  return <PhoneFrame><SessionGate>{children}</SessionGate></PhoneFrame>;
+}
 
 function MenuPathRedirect({ suffix = "" }: { suffix?: string }) {
   const { id } = useParams();
@@ -36,8 +47,9 @@ function InquireRelativeRedirect() {
 export function AppRouter() {
   return (
     <BrowserRouter>
-      <SessionGate>
+      <UserSessionBoundary>
       <Routes>
+        <Route path="/manage/*" element={<Suspense fallback={<ManageRouteSkeleton />}><ManageApp /></Suspense>} />
         <Route path="/" element={<SplashPage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/setup/allergen" element={<SetupAllergenPage />} />
@@ -78,7 +90,7 @@ export function AppRouter() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      </SessionGate>
+      </UserSessionBoundary>
     </BrowserRouter>
   );
 }
