@@ -1,4 +1,5 @@
 import { MyReviews } from "@/components/MyReviews";
+import { MyReports } from "@/components/MyReports";
 import { Toast } from "@/components/Toast";
 import { Link, useSearchParams } from "react-router-dom";
 
@@ -13,13 +14,21 @@ import { useFavorites } from "@/hooks/useFavoriteToggle";
 import { mapServerStatus } from "@/lib/api/adapters";
 import { useProfileStore } from "@/store/profileStore";
 
+const ACTIVITY_TABS = [
+  { id: "saved", label: "저장 메뉴" },
+  { id: "reviews", label: "내 리뷰" },
+  { id: "reports", label: "내 제보" },
+] as const;
+type ActivityTab = (typeof ACTIVITY_TABS)[number]["id"];
+
 export default function MyPage() {
   const allergens = useProfileStore((s) => s.allergens);
   const restrictions = useProfileStore((s) => s.restrictions);
   const fav = useFavorites();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = searchParams.get("tab") === "reviews" ? "reviews" : "saved";
-  const setTab = (next: "saved" | "reviews") => setSearchParams(next === "reviews" ? { tab: "reviews" } : {}, { replace: true });
+  const requestedTab = searchParams.get("tab");
+  const tab: ActivityTab = requestedTab === "reviews" || requestedTab === "reports" ? requestedTab : "saved";
+  const setTab = (next: ActivityTab) => setSearchParams(next === "saved" ? {} : { tab: next }, { replace: true });
 
   const savedCards: MenuCardModel[] = fav.favorites.map((f) => {
     const status = f.judgement
@@ -83,17 +92,21 @@ export default function MyPage() {
         <section className="mt-6">
           <h2 className="text-[16px] font-bold text-text">내 활동</h2>
           <div className="mt-3 flex gap-2" role="tablist" aria-label="내 활동">
-            {([{ id: "saved", label: "저장 메뉴" }, { id: "reviews", label: "내가 작성한 리뷰" }] as const).map(({ id, label }) =>
+            {ACTIVITY_TABS.map(({ id, label }, index) =>
               <button key={id} id={`my-tab-${id}`} type="button" role="tab" aria-selected={tab === id} aria-controls={`my-panel-${id}`}
                 tabIndex={tab === id ? 0 : -1} onKeyDown={(event) => {
                   if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
                   event.preventDefault();
-                  const next = event.key === "Home" ? "saved" : event.key === "End" ? "reviews" : id === "saved" ? "reviews" : "saved";
+                  const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? ACTIVITY_TABS.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + ACTIVITY_TABS.length) % ACTIVITY_TABS.length;
+                  const next = ACTIVITY_TABS[nextIndex].id;
                   setTab(next); document.getElementById(`my-tab-${next}`)?.focus();
                 }} onClick={() => setTab(id)} className={`inline-flex h-10 items-center rounded-full px-4 text-[13px] font-semibold ${tab === id ? "bg-primary text-white" : "border border-border-strong bg-card text-muted"}`}>{label}</button>)}
           </div>
           <div role="tabpanel" id="my-panel-reviews" aria-labelledby="my-tab-reviews" hidden={tab !== "reviews"} className="mt-4">
             <MyReviews active={tab === "reviews"} />
+          </div>
+          <div role="tabpanel" id="my-panel-reports" aria-labelledby="my-tab-reports" hidden={tab !== "reports"} className="mt-4">
+            <MyReports active={tab === "reports"} />
           </div>
           <div role="tabpanel" id="my-panel-saved" aria-labelledby="my-tab-saved" hidden={tab !== "saved"} className="mt-4 space-y-3">
             {fav.isLoading ? <ApiLoading /> : null}

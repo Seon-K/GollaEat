@@ -59,6 +59,7 @@ export interface DataProvider {
   mode: DataMode;
   getSession(): Promise<ApiSession>;
   createReport(input: ReportInput): Promise<ApiReport>;
+  getMyReports(page?: number, options?: ApiRequestOptions): Promise<{ items: ApiReport[]; pagination: PaginationUi }>;
   getDietaryCriteria(): Promise<ApiDietaryCriterion[]>;
   getProfile(options?: ApiRequestOptions): Promise<ApiProfile>;
   putProfile(criteria: string[]): Promise<ApiProfile>;

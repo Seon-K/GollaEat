@@ -142,6 +142,17 @@ export const apiProvider: DataProvider = {
     return apiPost<ApiReport>("/api/reports", input);
   },
 
+  async getMyReports(page = 1, options) {
+    const res = await apiGet<{ results: ApiReport[]; pagination: { page: number; limit: number; total: number } }>("/api/reports", { page, limit: 20 }, options);
+    const { page: current, limit, total } = res.pagination;
+    const totalPages = Math.ceil(total / limit);
+    return { items: res.results, pagination: {
+      page: current, limit, total, count: res.results.length, totalPages,
+      nextPage: current < totalPages ? current + 1 : null,
+      previousPage: current > 1 ? current - 1 : null,
+    } };
+  },
+
   async getReviews(menuId) {
     const res = await apiGet<ApiReviewsResponse>("/api/reviews", {
       menu_id: menuId,
