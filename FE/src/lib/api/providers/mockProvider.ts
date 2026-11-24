@@ -134,6 +134,11 @@ export const mockProvider: DataProvider = {
       const q = params.q;
       list = list.filter((m) => m.name.includes(q));
     }
+    const menuQuery = params.menu_query?.trim().toLocaleLowerCase();
+    if (menuQuery) {
+      const rank = (name: string) => name.toLocaleLowerCase() === menuQuery ? 0 : name.toLocaleLowerCase().includes(menuQuery) ? 1 : 2;
+      list.sort((a, b) => rank(a.name) - rank(b.name));
+    }
     const items: MenuListItemUi[] = list.map((m) => {
       const store = STORES.find((s) => s.id === m.storeId);
       const judgement = mockJudge(m.id);

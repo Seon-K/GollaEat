@@ -138,6 +138,13 @@ def indexed_menus(params, repository, profile):
         'price_asc': [F('price_amount').asc(nulls_last=True), tie],
         'price_desc': [F('price_amount').desc(nulls_last=True), tie],
         'distance_asc': [F('_distance').asc(nulls_last=True), tie]}[sort]
+    menu_query = params.get('menu_query', '').strip().casefold()
+    if menu_query:
+        qs = qs.annotate(_menu_relevance=Case(
+            When(dietary_state__name_key=menu_query, then=Value(0)),
+            When(dietary_state__name_key__contains=menu_query, then=Value(1)),
+            default=Value(2), output_field=IntegerField()))
+        order = ['_menu_relevance', *order]
     page, limit = int(params.get('page', 1)), int(params.get('limit', 20))
     rows = list(qs.annotate(_total=Window(Count('pk'))).select_related('restaurant', 'dietary_state').defer('restaurant__data').order_by(*order)[(page-1)*limit:page*limit])
     total = rows[0]._total if rows else qs.count()

@@ -20,6 +20,8 @@ import type { ApiRequestOptions } from "@/lib/api/client";
 export type DataMode = "api" | "mock";
 
 export interface MenuListParams {
+  /** Ranking only; keeps nonmatching menus in restaurant results. */
+  menu_query?: string;
   region?: string;
   judgement_status?: "match" | "needs_check" | "mismatch";
   restaurant_id?: string;

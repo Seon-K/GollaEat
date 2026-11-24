@@ -49,6 +49,7 @@ export const apiProvider: DataProvider = {
       region: params.region,
       judgement_status: params.judgement_status,
       restaurant_id: params.restaurant_id,
+      menu_query: params.menu_query,
       q: params.q,
       page: params.page,
       limit: params.limit,
