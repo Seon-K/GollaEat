@@ -1,6 +1,7 @@
 import { allergenDisplay, STORE_CONFIRMATION_NOTICE } from "@/lib/allergenDisplay";
 import { ReviewCard } from "@/components/ReviewCard";
 import { MenuDetailSkeleton } from "@/components/MenuDetailSkeleton";
+import { SkeletonBlock } from "@/components/LoadingSkeleton";
 import { Toast } from "@/components/Toast";
 import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
 
@@ -14,6 +15,7 @@ import { StoreMap } from "@/components/StoreMap";
 import { allergenLabel } from "@/data/allergens";
 import { useFavorites } from "@/hooks/useFavoriteToggle";
 import { apiKeys } from "@/lib/api/keys";
+import { menuDetailOptions, menuJudgementOptions } from "@/lib/api/menuDetailQueries";
 import { getDataProvider } from "@/lib/api/providers";
 import { formatPrice } from "@/lib/geo";
 import { VERDICT_COPY } from "@/lib/verdictCopy";
@@ -30,15 +32,8 @@ function MenuDetailContent() {
   const fav = useFavorites();
   const [reviewText, setReviewText] = useState("");
 
-  const menuQuery = useQuery({
-    queryKey: apiKeys.menu(id),
-    queryFn: ({ signal }) => getDataProvider().getMenu(id, { signal }),
-  });
-
-  const judgementQuery = useQuery({
-    queryKey: apiKeys.judgement(id),
-    queryFn: ({ signal }) => getDataProvider().postJudgement(id, { signal }),
-  });
+  const menuQuery = useQuery(menuDetailOptions(id));
+  const judgementQuery = useQuery(menuJudgementOptions(id));
 
   const reviewsQuery = useQuery({
     queryKey: apiKeys.reviews(id),
@@ -59,7 +54,9 @@ function MenuDetailContent() {
   });
 
   const menu = menuQuery.data;
-  const judgement = judgementQuery.data;
+  // Recheck the verdict panel during refetch (e.g. a changed dietary profile),
+  // while keeping independent menu information visible.
+  const judgement = judgementQuery.isFetching ? undefined : judgementQuery.data;
   const reviewTag = allergens[0]
     ? `${allergenLabel(allergens[0])} 제한`
     : "내 조건";
@@ -77,10 +74,7 @@ function MenuDetailContent() {
     return [...new Set([...judgement.unknownItems, ...fromReasons])];
   }, [judgement]);
 
-  if ((!menuQuery.isError && (menuQuery.isPending || menuQuery.isFetching)) ||
-      (!judgementQuery.isError && (judgementQuery.isPending || judgementQuery.isFetching))) {
-    return <MenuDetailSkeleton />;
-  }
+  if (!menuQuery.data && !menuQuery.isError) return <MenuDetailSkeleton />;
 
   if (menuQuery.isError || !menu) {
     return (
@@ -96,23 +90,12 @@ function MenuDetailContent() {
     );
   }
 
-  if (judgementQuery.isError || !judgement) {
-    return (
-      <main className="p-6">
-        <ApiErrorPanel
-          error={judgementQuery.error}
-          onRetry={() => void judgementQuery.refetch()}
-        />
-      </main>
-    );
-  }
-
-  const copy = VERDICT_COPY[judgement.status];
+  const copy = judgement ? VERDICT_COPY[judgement.status] : null;
   const allergensInfo = allergenDisplay(menu.allergenInformation);
   const panelDescription =
-    judgement.guidance?.message ?? (judgement.status === "check" && unknownBits.length > 0
+    judgement?.guidance?.message ?? (judgement?.status === "check" && unknownBits.length > 0
       ? "재료 정보 없음 · 매장 확인 필요"
-      : copy.description);
+      : copy?.description);
 
   const mapUrl =
     typeof menu.lat === "number" && typeof menu.lng === "number"
@@ -155,13 +138,14 @@ function MenuDetailContent() {
           </p>
         </section>
 
-        <StatusBadge
+        {judgementQuery.isError ? <ApiErrorPanel error={judgementQuery.error} onRetry={() => void judgementQuery.refetch()} /> : !judgement ?
+          <section role="status" aria-label="식이조건 판정 로딩 중" className="space-y-3 rounded-2xl bg-shell/50 p-5"><SkeletonBlock className="h-6 w-32" /><SkeletonBlock className="h-4 w-full" /><SkeletonBlock className="h-4 w-4/5" /></section> : <StatusBadge
           status={judgement.status}
           variant="panel"
           title={judgement.guidance?.label}
           description={panelDescription}
           note={judgement.guidance?.notice || STORE_CONFIRMATION_NOTICE}
-        />
+        />}
 
         <section className="rounded-2xl border border-[#eef1ef] bg-card p-4">
           <h2 className="text-[15px] font-bold text-text">재료 · 알레르겐 정보</h2>

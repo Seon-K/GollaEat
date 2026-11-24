@@ -1,4 +1,5 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { prefetchMenuDetail } from "@/lib/api/menuDetailQueries";
 import { ArrowLeft } from "lucide-react";
 import type { RestaurantUi } from "@/lib/api/adapters";
 import { apiKeys } from "@/lib/api/keys";
@@ -20,12 +21,13 @@ export function RestaurantMenuList({ restaurant, filters, origin, showDistance =
 }) {
   const allergens = useProfileStore((s) => s.allergens), restrictions = useProfileStore((s) => s.restrictions);
   const configured = allergens.length + restrictions.length > 0;
+  const client = useQueryClient();
   const fav = useFavorites();
   const params = { ...filterParams(filters, ""), region: "아산시", restaurant_id: restaurant.id, personalize: true,
     sort: filters.sort === "distance_asc" ? "dietary" : filters.sort, lat: origin.lat, lng: origin.lng, limit: 20 };
   const menus = useInfiniteQuery({
     queryKey: apiKeys.menus({ ...params, profile: profileSignature(allergens, restrictions), view: "restaurant-menus" }),
-    initialPageParam: 1, queryFn: ({ pageParam }) => getDataProvider().getMenus({ ...params, page: pageParam }),
+    initialPageParam: 1, queryFn: ({ pageParam, signal }) => getDataProvider().getMenus({ ...params, page: pageParam }, { signal }),
     getNextPageParam: (last) => last.pagination.nextPage ?? undefined,
     staleTime: Infinity, gcTime: Infinity, refetchOnWindowFocus: false, refetchOnReconnect: false,
   });
@@ -37,6 +39,7 @@ export function RestaurantMenuList({ restaurant, filters, origin, showDistance =
     {loading ? <DiscoverySkeleton /> : menus.data?.pages.flatMap((page) => page.items).map((m) => <MenuCard key={m.id}
       item={{ id: m.id, name: m.name, restaurantName: m.restaurantName, priceAmount: m.priceAmount,
         distanceKm: showDistance ? m.distanceKm : null, status: configured ? m.judgement?.status ?? "check" : "check", saved: fav.isSaved(m.id, m.saved) }}
+      onDetailIntent={() => prefetchMenuDetail(client, m.id)}
       onToggleSave={() => fav.toggleSave(m.id, { ...m, saved: fav.isSaved(m.id, m.saved) })} saving={fav.isSaving(m.id)} />)}
     {menus.isFetchingNextPage && <DiscoverySkeleton count={2} />}
     {!loading && menus.isSuccess && !menus.data.pages[0].items.length && <p className="py-5 text-center text-sm text-muted">검색 조건에 맞는 등록 메뉴가 없습니다.</p>}

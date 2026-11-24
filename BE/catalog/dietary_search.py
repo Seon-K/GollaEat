@@ -77,7 +77,13 @@ def ranks(qs, context):
     if not ids:
         return qs.annotate(_rank=Value(1, output_field=IntegerField()))
     statuses = MenuDietaryStatus.objects.filter(menu_id=OuterRef('pk'), criterion_id__in=ids,
-        menu_revision=OuterRef('dietary_state__revision')).order_by().values('menu_id').annotate(
+        menu_revision=OuterRef('dietary_state__revision')).order_by()
+    if len(ids) == 1:
+        # The unique menu/criterion key already identifies the combined rank.
+        # Avoid a GROUP BY/COUNT aggregate for every candidate in home discovery.
+        statuses = statuses.values('rank')[:1]
+    else:
+        statuses = statuses.values('menu_id').annotate(
             maximum=Max('rank'), conditions=Count('criterion_id')).annotate(combined=Case(
                 When(maximum=2, then=Value(2)), When(conditions=len(ids), then=F('maximum')),
                 default=Value(1), output_field=IntegerField())).values('combined')[:1]
@@ -162,7 +168,11 @@ def indexed_restaurants(params, repository, profile):
         return None
     context = EvaluationContext(profile) if params.get('personalize') == 'true' else None
     native = native_menus(params, restaurant_search=True)
-    if not ensure_ready(native):
+    # A first-time visitor without dietary conditions needs only current menu
+    # counts/prices. Do not rebuild dietary evidence for a plain card request.
+    plain_card = (params.get('view') == 'card' and not (context and context.criteria)
+                  and not any(params.get(key, '').strip() for key in ('q', 'category')))
+    if not plain_card and not ensure_ready(native):
         return None
     menus = ranks(documents(native, params, restaurant_search=True), context)
     aggregate = menus.order_by().values('restaurant_id').annotate(summary=JSONObject(

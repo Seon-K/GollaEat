@@ -21,6 +21,7 @@ interface MenuCardProps {
   variant?: "explore" | "saved";
   onToggleSave?: () => void;
   saving?: boolean;
+  onDetailIntent?: () => void;
 }
 
 export function MenuCard({
@@ -28,6 +29,7 @@ export function MenuCard({
   variant = "explore",
   onToggleSave,
   saving,
+  onDetailIntent,
 }: MenuCardProps) {
   const distanceLabel =
     item.distanceKm != null
@@ -37,6 +39,9 @@ export function MenuCard({
   return (
     <div className="relative rounded-2xl border border-border bg-card p-4 shadow-[0_2px_8px_rgba(37,42,39,0.03)]">
       <Link
+        onPointerEnter={onDetailIntent}
+        onFocus={onDetailIntent}
+        onPointerDown={onDetailIntent}
         to={
           variant === "saved" ? `/menu/${item.id}?from=my` : `/menu/${item.id}`
         }

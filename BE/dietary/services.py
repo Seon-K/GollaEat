@@ -85,6 +85,16 @@ class EvaluationContext:
         component_ids = [mid for mid in component_ids if mid not in self.cached_judgements]
         if not component_ids:
             return
+        if settings.CATALOG_USE_DB and isinstance(catalog, DietaryCatalog):
+            from catalog.dietary_index import available, ready_condition
+            from catalog.models import MenuDietaryState
+            if available():
+                snapshots = dict(MenuDietaryState.objects.filter(ready_condition(),
+                    menu_id__in=component_ids, evaluation_data__isnull=False).values_list('menu_id', 'evaluation_data'))
+                self.component_data.update(snapshots)
+                component_ids = [mid for mid in component_ids if mid not in snapshots]
+                if not component_ids:
+                    return
         batch = getattr(catalog, 'get_components', None)
         if callable(batch):
             data = batch(component_ids)

@@ -222,3 +222,21 @@ ProfileCacheSync mounts after initial profile hydration, avoiding invalidating t
 first home query. Subsequent profile edits still invalidate personalized queries.
 Home/map request `view=card`; restaurant-menu and detail queries keep full data.
 Home page caches remain in-memory for the app session, not persisted across refresh.
+
+
+## Display and interaction refinements
+
+Initial `/explore` session loading renders the same disabled home layout and restaurant
+skeletons as the subsequent restaurant request, without fetching personalized data
+before hydration. Recent GPS fixes are reused for up to 60 seconds across tab changes;
+the current-location action can explicitly refresh them.
+
+Menu-card intent prefetches detail and judgement queries. Menu metadata is cached for
+five minutes, and only the verdict panel stays a skeleton while its server result is
+pending or refreshed. The API provider uses `view=display` to omit analysis data.
+Dietary profile/session invalidation still applies to these query keys.
+
+The map sheet can collapse to its title/handle. Raised sheet snaps open filter menus
+below the controls; lower snaps open them above. Portal options retain mobile taps
+through null-related-target blur, and focus changes use `preventScroll`.
+The staff screen colors the frame safe area and removes the common top padding.

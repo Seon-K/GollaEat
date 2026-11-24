@@ -98,7 +98,12 @@ def profile(request):
 @endpoint(['POST'])
 def judgement(request):
     mid = ids([request.payload['menu_id']])[0]
-    return JsonResponse(evaluate(owner(request), mid))
+    profile = owner(request)
+    context = EvaluationContext(profile)
+    context.prime([mid])
+    result = evaluate(profile, mid, context=context)
+    context.flush()
+    return JsonResponse(result)
 
 
 @endpoint(['POST'])

@@ -232,7 +232,16 @@ class DatabaseCatalogRepository:
                     .order_by('preprocess_row_id')]
 
     def get_menu(self, menu_id):
-        row = Menu.objects.select_related('restaurant', 'analysis_reference', 'allergen_link__source').annotate(
+        return self._get_menu(menu_id, include_analysis=True)
+
+    def get_menu_display(self, menu_id):
+        return self._get_menu(menu_id, include_analysis=False)
+
+    def _get_menu(self, menu_id, *, include_analysis):
+        related = ['restaurant', 'allergen_link__source']
+        if include_analysis:
+            related.append('analysis_reference')
+        row = Menu.objects.select_related(*related).defer('restaurant__data').annotate(
             _catalog_has_declarations=Exists(FoodDeclaration.objects.filter(menu_id=OuterRef('pk'))),
             _catalog_has_components=Exists(MenuComponent.objects.filter(menu_id=OuterRef('pk'))),
             _catalog_has_groups=Exists(OptionGroup.objects.filter(menu_id=OuterRef('pk')))).filter(pk=menu_id).first()
@@ -253,7 +262,7 @@ class DatabaseCatalogRepository:
             'source': source_json(link.source)}
         return dict(menu, allergen_information={'allergens_contains_normalized': None,
             'declarations': declarations, 'brand_reference': reference},
-            analysis_reference=analysis_json(getattr(row, 'analysis_reference', None)),
+            analysis_reference=analysis_json(getattr(row, 'analysis_reference', None)) if include_analysis else None,
             original_information={'description_raw': menu.get('description')},
             source={'source_url': None, 'collected_at': menu.get('collected_at')},
             verification={'verification_status': 'declarations_available' if declarations else 'unmatched'}, safety_assessment='not_determined',

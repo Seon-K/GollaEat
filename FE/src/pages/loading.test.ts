@@ -133,12 +133,13 @@ describe("restaurant home integration", () => {
 });
 
 describe("detail request lifecycle", () => {
-  it("waits for the server judgement with a detail skeleton", async () => {
+  it("shows menu data while only the judgement panel remains a skeleton", async () => {
     const pending = deferred<JudgementUi>();
     mocks.provider.postJudgement.mockReturnValue(pending.promise);
     mount(h(MenuDetailPage), "/menu/m1");
     await waitFor(() => expect(mocks.provider.postJudgement).toHaveBeenCalledTimes(1));
-    expect(screen.queryByRole("heading", { name: detail.name })).toBeNull();
+    expect(await screen.findByRole("heading", { name: detail.name })).toBeTruthy();
+    expect(screen.getByRole("status", { name: "식이조건 판정 로딩 중" })).toBeTruthy();
     await act(async () => pending.resolve(judgement));
     expect(await screen.findByRole("heading", { name: detail.name })).toBeTruthy();
   });
@@ -162,6 +163,20 @@ describe("safe introduction loading", () => {
     await waitFor(() => expect(mocks.provider.getProfile).toHaveBeenCalledTimes(1));
     await act(async () => profile.resolve({ criteria: [], setup_completed: false }));
     await waitFor(() => expect(screen.getByRole("button", { name: "시작하기" }).hasAttribute("disabled")).toBe(false));
+  });
+
+  it("keeps identical restaurant placeholders before and after session hydration", async () => {
+    const profile = deferred<{ criteria: string[]; setup_completed: boolean }>();
+    mocks.provider.getProfile.mockReturnValue(profile.promise);
+    mocks.provider.getRestaurants.mockReturnValue(new Promise(() => {}));
+    mount(h(ExplorePage), "/explore", true);
+    const initial = screen.getByRole("status", { name: "식당 목록 로딩 중" }).innerHTML;
+    expect(mocks.provider.getRestaurants).not.toHaveBeenCalled();
+    await act(async () => profile.resolve({ criteria: [], setup_completed: false }));
+    // StrictMode may cancel the first mount's request; only one stays active.
+    await waitFor(() => expect(mocks.provider.getRestaurants.mock.calls.filter(
+      ([, options]) => !options.signal.aborted)).toHaveLength(1));
+    expect(screen.getByRole("status", { name: "식당 목록 로딩 중" }).innerHTML).toBe(initial);
   });
 
   it("does not render personalized pages before server profile is available", async () => {

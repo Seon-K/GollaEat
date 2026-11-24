@@ -67,6 +67,44 @@ class DietaryIndexTests(TestCase):
         self.assertEqual(len(grown['results']), 20)
         self.assertEqual(len(after), len(before))
 
+    def test_detail_judgement_reuses_facts_but_rechecks_current_profile(self):
+        session = self.client.session
+        session['dietary_owner'] = str(self.profile.guest_id)
+        session.save()
+        with patch.object(DatabaseCatalogRepository, 'get_dietary_components', side_effect=AssertionError('snapshot should avoid evidence reads')):
+            response = self.client.post('/api/judgements', {'menu_id': 'm00'}, content_type='application/json')
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()['status'], 'match')
+            self.profile.criteria.add(Criterion.objects.get(code='allergen-egg'))
+            changed = self.client.post('/api/judgements', {'menu_id': 'm00'}, content_type='application/json')
+            self.assertEqual(changed.json()['status'], 'needs_check')
+        self.profile.criteria.remove(Criterion.objects.get(code='allergen-egg'))
+        FoodDeclaration.objects.filter(menu_id='m00').update(presence='present')
+        refreshed = self.client.post('/api/judgements', {'menu_id': 'm00'}, content_type='application/json')
+        self.assertEqual(refreshed.json()['status'], 'mismatch')
+
+    def test_new_visitor_cards_do_not_build_unneeded_dietary_evidence(self):
+        MenuDietaryState.objects.update(dirty=True, evaluation_data=None)
+        with patch('catalog.dietary_index.rebuild', side_effect=AssertionError('unconfigured cards need no evaluation')):
+            result = discover_restaurants(dict(personalize='true', view='card', sort='dietary'),
+                DatabaseCatalogRepository(), self.empty)
+        row = result['results'][0]
+        self.assertFalse(row['personalization']['applied'])
+        self.assertEqual(row['dietary_summary'], {
+            'match_menu_count': 0, 'check_menu_count': 45, 'mismatch_menu_count': 0})
+
+    def test_snapshot_context_reduces_detail_reads_without_changing_judgement(self):
+        from dietary.services import EvaluationContext, evaluate
+        available()
+        with CaptureQueriesContext(connection) as original:
+            expected = evaluate(self.profile, 'm00')
+        with CaptureQueriesContext(connection) as optimized:
+            context = EvaluationContext(self.profile)
+            context.prime(['m00'])
+            actual = evaluate(self.profile, 'm00', context=context)
+        self.assertEqual(actual, expected)
+        self.assertLess(len(optimized), len(original))
+
     def test_menu_parity_all_filters_pages_and_only_page_evidence(self):
         repo = DatabaseCatalogRepository()
         for status in ['', 'match', 'mismatch', 'needs_check']:

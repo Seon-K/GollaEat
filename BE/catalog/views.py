@@ -93,8 +93,14 @@ def menu_detail(request, menu_id):
     if personalize not in {'true', 'false'}:
         return JsonResponse({'error': {'code': 'invalid_query_parameter', 'parameter': 'personalize',
                                       'message': 'personalize must be true or false'}}, status=400)
+    view = request.GET.get('view', 'full')
+    if view not in {'full', 'display'}:
+        return JsonResponse({'error': {'code': 'invalid_query_parameter', 'parameter': 'view',
+                                      'message': 'view must be full or display'}}, status=400)
     try:
-        result = serialize_menu_detail(_csv_repository().get_menu(menu_id))
+        repository = _csv_repository()
+        reader = getattr(repository, 'get_menu_display', repository.get_menu) if view == 'display' else repository.get_menu
+        result = serialize_menu_detail(reader(menu_id))
     except CatalogDataError as exc:
         return _catalog_unavailable(exc)
     if result is None:
@@ -102,6 +108,8 @@ def menu_detail(request, menu_id):
             {'error': {'code': 'menu_not_found', 'message': 'menu not found'}}, status=404,
         )
     result.setdefault('analysis_reference', None)
+    if view == 'display':
+        result['analysis_reference'] = None
     if personalize == 'true':
         _personalized(request, {'results': [result]})
     return JsonResponse(result)
