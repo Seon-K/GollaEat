@@ -31,10 +31,10 @@ export function ExploreSelect({ triggerLabel, ariaLabel, triggerIcon, options, v
   }, [open, side, topBoundary, align]);
   useEffect(() => {
     if (!open) return;
-    listRef.current?.querySelector<HTMLButtonElement>('[role="option"][aria-selected="true"]')?.focus();
-    const outside = (event: PointerEvent) => { if (!rootRef.current?.contains(event.target as Node) && !listRef.current?.contains(event.target as Node)) setOpen(false); };
+    listRef.current?.querySelector<HTMLButtonElement>('[role="option"][aria-selected="true"]')?.focus({ preventScroll: true });
+    const outside = (event: PointerEvent) => { if (!rootRef.current?.contains(event.target instanceof Node ? event.target : null) && !listRef.current?.contains(event.target instanceof Node ? event.target : null)) setOpen(false); };
     const moved = (event: Event) => {
-      if (!listRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!listRef.current?.contains(event.target instanceof Node ? event.target : null)) setOpen(false);
     };
     document.addEventListener("pointerdown", outside);
     window.addEventListener("scroll", moved, true);
@@ -45,12 +45,12 @@ export function ExploreSelect({ triggerLabel, ariaLabel, triggerIcon, options, v
       window.removeEventListener("resize", moved);
     };
   }, [open]);
-  const close = () => { setOpen(false); triggerRef.current?.focus(); };
+  const close = () => { setOpen(false); triggerRef.current?.focus({ preventScroll: true }); };
   return <div ref={rootRef} className={`relative ${className}`} onKeyDown={(event) => {
     if (event.key === "Escape") { event.preventDefault(); close(); }
     if (event.key === "Tab") setOpen(false);
-  }} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget) && !listRef.current?.contains(event.relatedTarget)) setOpen(false); }}>
-    <button ref={triggerRef} type="button" onClick={() => { setOpen(!open); }} onKeyDown={(event) => {
+  }} onBlur={(event) => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget) && !listRef.current?.contains(event.relatedTarget)) setOpen(false); }}>
+    <button ref={triggerRef} type="button" onClick={() => { setOpen((value) => !value); }} onKeyDown={(event) => {
       if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); setOpen(true); }
     }} aria-expanded={open} aria-haspopup="listbox" aria-controls={open ? listId : undefined} aria-label={ariaLabel ?? triggerLabel}
       className={`inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-[13px] font-medium shadow-sm touch-target ${open ? "border-primary bg-primary-light text-primary" : "border-border-strong bg-card text-text"}`}>
@@ -59,6 +59,7 @@ export function ExploreSelect({ triggerLabel, ariaLabel, triggerIcon, options, v
     {open && createPortal(<div ref={listRef} id={listId} role="listbox" aria-label={ariaLabel ?? triggerLabel} style={position}
       className="fixed z-[100] overflow-y-auto rounded-2xl border border-border-strong bg-card p-1.5 shadow-[0_8px_32px_rgba(37,42,39,0.16)]">
       {options.map((option, index) => <button key={option.id} type="button" role="option" aria-selected={option.id === value}
+        onPointerDown={(event) => { if (event.pointerType === "mouse") event.preventDefault(); }}
         onClick={() => { onChange(option.id); close(); }} onKeyDown={(event) => {
           const buttons = listRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]');
           let next = index;
@@ -67,7 +68,7 @@ export function ExploreSelect({ triggerLabel, ariaLabel, triggerIcon, options, v
           else if (event.key === "Home") next = 0;
           else if (event.key === "End") next = options.length - 1;
           else return;
-          event.preventDefault(); buttons?.[next]?.focus();
+          event.preventDefault(); buttons?.[next]?.focus({ preventScroll: true });
         }} className={`flex w-full items-center justify-between gap-4 rounded-xl px-3 py-3 text-left text-sm transition-colors hover:bg-primary-light ${option.id === value ? "bg-primary-light font-semibold text-primary" : "text-text"}`}>
         {option.label}{option.id === value && <Check className="size-4" aria-hidden />}
       </button>)}

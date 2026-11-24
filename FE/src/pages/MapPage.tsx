@@ -103,7 +103,7 @@ export default function MapPage() {
       </button>
     </div>
     <MapResultsSheet expanded={!!selected} onHeightChange={setSheetHeight} controlsHeight={controlsHeight}
-      controls={<DiscoveryControls value={filters} onChange={(patch) => update("map", patch)} distance showSearch={false} side="top" topBoundary={controlsHeight + 12} />}
+      controls={(side) => <DiscoveryControls value={filters} onChange={(patch) => update("map", patch)} distance showSearch={false} side={side} topBoundary={controlsHeight + 12} />}
       title={selected ? selected.name : "이 지도에서 추천하는 식당"}
       subtitle={selected ? "메뉴 카드를 누르면 상세 정보를 볼 수 있어요" : restaurantLoading ? <span aria-hidden="true" className="inline-block h-3 w-40 rounded-full bg-shell motion-safe:animate-pulse" /> : `총 ${total}곳 중 ${restaurants.length}곳 표시 · ${state.user ? "내 위치 기준 거리" : "지도 영역 기준"}`}>
       <p className="text-[11px] text-muted">{geo.status === "loading" ? <span role="status" aria-label="위치 확인 중"><SkeletonBlock className="h-3 w-40" /></span> : GEO_MESSAGES[geo.status]} {!state.user && !state.viewport && "기본 지역: 충남 아산시"}</p>
