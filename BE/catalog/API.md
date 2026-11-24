@@ -517,3 +517,18 @@ Hangul-only region searches use direct containment (Hangul has no case mapping),
 avoiding construction of the complete Unicode fold mapping on Asan's first request;
 other region searches keep exact Unicode folding. These are API-sequence timings,
 not browser render/load guarantees; remote DB/network latency remains.
+
+
+## Menu display reads and detail judgement latency
+
+`GET /api/menus/{id}?view=display` preserves the menu detail fields while returning
+`analysis_reference: null`. The database reader skips the analysis join/payload and
+unused restaurant source JSON. The default `view=full` contract is unchanged;
+unknown views return the existing invalid-query error structure.
+
+`POST /api/judgements` primes its evaluator with ready, versioned, unexpired stored
+menu facts when available. It still evaluates the current session profile using the
+existing engine. Dirty, missing or expired snapshots fall back to source evidence.
+Unconfigured plain restaurant-card requests skip unnecessary dietary-index rebuilding.
+Single-criterion indexed ranks use the unique menu/criterion lookup directly.
+These changes require no schema migration or new environment variables.
