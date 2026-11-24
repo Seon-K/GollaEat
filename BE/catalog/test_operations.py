@@ -49,6 +49,10 @@ class CatalogOperationsTests(TestCase):
         local = ZoneInfo('Asia/Seoul')
         moment = datetime(2026, 11, 23, 10, tzinfo=local)
         self.assertEqual(operating_status(self.restaurant, moment), 'unknown')
+        # Keep evidence valid at the fixed scenario time, independent of today's date.
+        self.source.checked_at = moment - timedelta(days=1)
+        self.source.valid_until = moment + timedelta(days=365)
+        self.source.save()
         self.hours()
         for hour, status in [(10, 'open'), (14, 'break'), (15, 'open'), (21, 'closed'), (8, 'closed')]:
             self.assertEqual(operating_status(self.restaurant, moment.replace(hour=hour)), status)
