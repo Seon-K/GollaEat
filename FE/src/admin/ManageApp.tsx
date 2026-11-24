@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { manageApi, ManageError } from './api';
+import { AllergenEditor, allergenSummary, initialAllergens, type Allergen } from './AllergenEditor';
 import './manage.css';
 import { ManageRouteSkeleton, ManageStatsSkeleton, ManageTableSkeleton, ManageButtonSkeleton } from './ManageSkeleton';
 
@@ -20,7 +21,7 @@ const sections: Record<string, Section> = {
     { key: 'name', label: '매장명' }, { key: 'address', label: '주소', type: 'textarea' }, { key: 'phone', label: '연락처' },
     { key: 'brand', label: '브랜드' }, { key: 'category', label: '카테고리' }, { key: 'restaurant_type', label: '매장 유형' },
   ] },
-  menus: { title: '메뉴 관리', app: 'catalog', model: 'menu', columns: ['name', 'restaurant_name', 'price_amount'], fields: [
+  menus: { title: '메뉴 관리', app: 'catalog', model: 'menu', columns: ['name', 'restaurant_name', 'price_amount', 'allergens'], fields: [
     { key: 'name', label: '메뉴명' }, { key: 'description', label: '설명', type: 'textarea' },
     { key: 'price_amount', label: '가격 (비우면 미확인)', type: 'number' }, { key: 'category', label: '카테고리' },
   ] },
@@ -28,7 +29,7 @@ const sections: Record<string, Section> = {
   reviews: { title: '리뷰 관리', app: 'dietary', model: 'review', columns: ['menu_id', 'body', 'created_at'], fields: [] },
 };
 const labels: Record<string, string> = { name: '이름', kind: '유형', category: '분류', active: '사용 여부', address: '주소', phone: '연락처', restaurant_name: '매장', price_amount: '가격', sale_status: '판매 상태', content: '제보 내용', status: '처리 상태', created_at: '작성일', menu_id: '메뉴 ID', body: '리뷰 내용' };
-Object.assign(labels, { id: 'ID', criterion_name: '연결 기준', excluded_tags: '제외 성분 태그', source: '근거·출처', enabled: '사용 여부' });
+Object.assign(labels, { id: 'ID', criterion_name: '연결 기준', excluded_tags: '제외 성분 태그', source: '근거·출처', enabled: '사용 여부', allergens: '설정된 알레르기' });
 const values: Record<string, string> = { allergen: '알레르겐', ingredient: '제한재료', diet: '식이 유형', preference: '음식 선호', pending: '접수', reviewing: '검토 중', resolved: '반영 완료', rejected: '반려', unverified: '미확인', available: '판매 확인', unavailable: '판매 중지 확인', menu_price: '메뉴·가격', ingredients_allergens: '재료·알레르겐', business: '영업정보', other: '기타' };
 function display(value: unknown): string {
   if (value === null || value === undefined || value === '') return '—';
@@ -94,14 +95,14 @@ function Records({ resource, section, session }: { resource: string; section: Se
   const refresh = async () => { setSelected(null); setMessage('처리되었습니다.'); await client.invalidateQueries({ queryKey: ['manage'] }); };
   return <><span className="manage-eyebrow">MANAGEMENT</span><h1>{section.title}</h1><p className="manage-muted">{resource === 'reviews' ? '리뷰 본문은 수정하지 않으며, 필요한 경우 삭제할 수 있습니다.' : resource === 'reports' ? '제보 근거를 확인한 후 검토·반영 결과를 기록하세요.' : '목록에서 항목을 선택하여 상세 정보를 확인하고 수정하세요.'}</p>
     <div className="manage-toolbar"><form onSubmit={e => { e.preventDefault(); setSearch(input); setPage(1); }}><input aria-label="목록 검색" placeholder="이름 또는 내용 검색" value={input} onChange={e => setInput(e.target.value)} /><button>검색</button></form>{['criteria', 'rules'].includes(resource) && can(session, section, 'add') && <button className="manage-primary" onClick={() => { setMessage(''); setSelected(resource === 'criteria' ? { id: '', name: '', code: '', kind: 'allergen', category: '', active: false } : { id: '', criterion: '', excluded_tags: [], source: '', enabled: true }); }}>{resource === 'criteria' ? '기준 정보 등록' : '판단 규칙 등록'}</button>}</div>
-    {message && <p role="status">{message}</p>}{query.isPending ? <ManageTableSkeleton columns={section.columns.length + 1} /> : query.isError ? <p className="manage-error" role="alert">{query.error.message} <button onClick={() => void query.refetch()}>다시 시도</button></p> : <><div className="manage-table-wrap"><table><thead><tr>{section.columns.map(c => <th key={c}>{labels[c]}</th>)}<th>상세</th></tr></thead><tbody>{query.data.results.map(row => <tr key={row.id}>{section.columns.map(c => <td key={c}><span className="manage-cell">{display(row[c])}</span></td>)}<td><button onClick={() => { setMessage(''); setSelected(row); }}>열기</button></td></tr>)}</tbody></table>{!query.data.results.length && <p className="manage-empty">표시할 데이터가 없습니다.</p>}</div><div className="manage-pagination"><span>총 {query.data.total.toLocaleString()}건 · {page}페이지</span><button disabled={page === 1} onClick={() => setPage(p => p - 1)}>이전</button><button disabled={page * 20 >= query.data.total} onClick={() => setPage(p => p + 1)}>다음</button></div></>}
+    {message && <p role="status">{message}</p>}{query.isPending ? <ManageTableSkeleton columns={section.columns.length + 1} /> : query.isError ? <p className="manage-error" role="alert">{query.error.message} <button onClick={() => void query.refetch()}>다시 시도</button></p> : <><div className="manage-table-wrap"><table><thead><tr>{section.columns.map(c => <th key={c}>{labels[c]}</th>)}<th>상세</th></tr></thead><tbody>{query.data.results.map(row => <tr key={row.id}>{section.columns.map(c => <td key={c}><span className={c === 'allergens' ? 'manage-allergen-cell' : 'manage-cell'}>{c === 'allergens' ? allergenSummary(row.allergens as Allergen[] | undefined, String(row.reference_allergens || '')) : display(row[c])}</span></td>)}<td><button onClick={() => { setMessage(''); setSelected(row); }}>열기</button></td></tr>)}</tbody></table>{!query.data.results.length && <p className="manage-empty">표시할 데이터가 없습니다.</p>}</div><div className="manage-pagination"><span>총 {query.data.total.toLocaleString()}건 · {page}페이지</span><button disabled={page === 1} onClick={() => setPage(p => p - 1)}>이전</button><button disabled={page * 20 >= query.data.total} onClick={() => setPage(p => p + 1)}>다음</button></div></>}
     {selected && <Editor key={selected.id} resource={resource} section={section} record={selected} writable={can(session, section, selected.id ? 'change' : 'add')} deletable={can(session, section, 'delete')} close={() => setSelected(null)} saved={refresh} />}
   </>;
 }
 
 function Editor({ resource, section, record, writable, deletable, close, saved }: { resource: string; section: Section; record: RecordData; writable: boolean; deletable: boolean; close: () => void; saved: () => Promise<void> }) {
   const dialog = useRef<HTMLElement>(null);
-  const [draft, setDraft] = useState<RecordData>({ ...record, review_notes: record.review_notes || '' });
+  const [draft, setDraft] = useState<RecordData>({ ...record, review_notes: record.review_notes || '', allergens: initialAllergens(record.allergens as Allergen[] | undefined, String(record.reference_allergens || '')) });
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const [dirty, setDirty] = useState(false);
   useEffect(() => { const handler = (event: BeforeUnloadEvent) => { if (dirty) event.preventDefault(); }; window.addEventListener('beforeunload', handler); return () => window.removeEventListener('beforeunload', handler); }, [dirty]);
   const attemptClose = () => { if (!busy && (!dirty || window.confirm('저장하지 않은 변경 사항을 닫을까요?'))) close(); };
@@ -128,7 +129,7 @@ function Editor({ resource, section, record, writable, deletable, close, saved }
       } else if (resource === 'reports') {
         await manageApi(path, 'POST', { action, review_notes: draft.review_notes });
       } else {
-        const keys = [...section.fields.map(f => f.key), ...(!record.id ? resource === 'criteria' ? ['code', 'kind'] : ['criterion'] : [])];
+        const keys = [...section.fields.map(f => f.key), ...(resource === 'menus' ? ['allergens'] : []), ...(!record.id ? resource === 'criteria' ? ['code', 'kind'] : ['criterion'] : [])];
         await manageApi(path, record.id ? 'PATCH' : 'POST', Object.fromEntries(keys.map(k => [k, draft[k]])));
       }
       setDirty(false); await saved();
@@ -137,6 +138,7 @@ function Editor({ resource, section, record, writable, deletable, close, saved }
   const fields: Field[] = [...(!record.id ? resource === 'criteria' ? [{ key: 'code', label: '고유 코드 (영문·숫자·하이픈)' }, { key: 'kind', label: '유형', options: [['allergen', '알레르겐'], ['ingredient', '제한재료'], ['diet', '식이 유형'], ['preference', '음식 선호']] } satisfies Field] : [{ key: 'criterion', label: '연결할 기준 ID (기준 정보 목록에서 확인)', type: 'number' } satisfies Field] : []), ...section.fields];
   const change = (key: string, value: unknown) => { setDraft(d => ({ ...d, [key]: value })); setDirty(true); };
   return <div className="manage-overlay"><section ref={dialog} className="manage-editor" role="dialog" aria-modal="true" aria-labelledby="manage-editor-title" onKeyDown={e => { if (e.key === 'Escape') attemptClose(); }}><header><div><small>{record.id || '신규 등록'}</small><h2 id="manage-editor-title">{section.title} 상세</h2></div><button autoFocus onClick={attemptClose} disabled={busy}>닫기</button></header><form onSubmit={e => { e.preventDefault(); void execute(); }}>
+    {resource === 'menus' && <AllergenEditor rows={draft.allergens as Allergen[]} disabled={!writable || busy} onChange={rows => change('allergens', rows)} />}
     {resource === 'criteria' && <p className="manage-muted">새 기준은 비활성으로 등록한 뒤 판단 규칙에 제외 성분 태그와 근거를 연결하고 활성화하세요.</p>}
     <fieldset disabled={!writable || busy}>{fields.map(field => <label key={field.key}>{field.label}{field.options ? <select value={String(draft[field.key] ?? '')} onChange={e => change(field.key, e.target.value)}>{field.options.map(([v, label]) => <option key={v} value={v}>{label}</option>)}</select> : field.type === 'checkbox' ? <input type="checkbox" checked={Boolean(draft[field.key])} onChange={e => change(field.key, e.target.checked)} /> : field.type === 'textarea' || field.type === 'tags' ? <textarea rows={4} value={field.type === 'tags' ? (draft[field.key] as string[]).join(', ') : String(draft[field.key] ?? '')} onChange={e => change(field.key, field.type === 'tags' ? e.target.value.split(',').map(tag => tag.trim()) : e.target.value)} /> : <input type={field.type || 'text'} min={field.type === 'number' ? 0 : undefined} step={field.type === 'number' ? 1 : undefined} required={['name', 'code', 'criterion'].includes(field.key)} value={String(draft[field.key] ?? '')} onChange={e => change(field.key, field.type === 'number' ? e.target.value === '' ? null : Number(e.target.value) : e.target.value)} />}</label>)}</fieldset>
     {resource === 'reviews' && <><p>메뉴 ID: {display(record.menu_id)}</p><p className="manage-full-text">{display(record.body)}</p></>}
