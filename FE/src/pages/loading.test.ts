@@ -76,7 +76,7 @@ describe("restaurant home integration", () => {
     const view = mount(h(ExplorePage));
     await screen.findByText('기존 식당');
     void view.client.invalidateQueries({ queryKey: ['gollaeat', 'restaurants'] });
-    await screen.findByRole('status', { name: '식당 목록 갱신 중' });
+    await waitFor(() => expect(mocks.provider.getRestaurants).toHaveBeenCalledTimes(2));
     expect(screen.getByText('기존 식당')).toBeTruthy();
     expect(screen.queryByRole('status', { name: '식당 목록 로딩 중' })).toBeNull();
     await act(async () => pending.resolve({ items: [restaurant], pagination }));
@@ -87,7 +87,7 @@ describe("restaurant home integration", () => {
     await screen.findByText('기존 식당');
     mocks.geo.position = { lat: 36.8, lng: 127.1 };
     view.rerenderPage();
-    await screen.findByRole('status', { name: '식당 목록 갱신 중' });
+    await waitFor(() => expect(mocks.provider.getRestaurants).toHaveBeenCalledTimes(2));
     expect(screen.getByText('기존 식당')).toBeTruthy();
     expect(screen.queryByText('내 위치에서 1.0km')).toBeNull();
     expect((screen.getByRole('button', { name: '기존 식당 메뉴 보기' }).closest('fieldset') as HTMLFieldSetElement).disabled).toBe(true);
