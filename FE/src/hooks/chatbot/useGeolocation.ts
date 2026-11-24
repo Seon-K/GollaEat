@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { locate, LocationError } from "@/hooks/useGeolocation";
 import { ASAN_ORIGIN } from "@/data/mock";
 
 export type GeoStatus = "pending" | "ready" | "denied" | "unavailable";
@@ -14,7 +15,7 @@ export interface UserLocation {
 interface UseGeolocationResult {
   location: UserLocation;
   status: GeoStatus;
-  refresh: () => void;
+  refresh: () => Promise<UserLocation>;
 }
 
 const FALLBACK: UserLocation = {
@@ -31,47 +32,32 @@ const FALLBACK: UserLocation = {
 export function useGeolocation(): UseGeolocationResult {
   const [location, setLocation] = useState<UserLocation>(FALLBACK);
   const [status, setStatus] = useState<GeoStatus>("pending");
-  const [nonce, setNonce] = useState(0);
+  const generation = useRef(0);
 
-  const refresh = useCallback(() => setNonce((n) => n + 1), []);
+  const refresh = useCallback(async () => {
+    const requestId = ++generation.current;
+    setStatus("pending");
+    try {
+      const point = await locate(navigator.geolocation);
+      const current = { ...point, label: "현재 위치", isGps: true };
+      if (requestId === generation.current) {
+        setLocation(current);
+        setStatus("ready");
+      }
+      return current;
+    } catch (error) {
+      if (requestId === generation.current) {
+        setLocation(FALLBACK);
+        setStatus(error instanceof LocationError && error.status === "denied" ? "denied" : "unavailable");
+      }
+      throw error;
+    }
+  }, []);
 
   useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setLocation(FALLBACK);
-      setStatus("unavailable");
-      return;
-    }
-
-    setStatus("pending");
-    let cancelled = false;
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        if (cancelled) return;
-        setLocation({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          label: "현재 위치",
-          isGps: true,
-        });
-        setStatus("ready");
-      },
-      () => {
-        if (cancelled) return;
-        setLocation(FALLBACK);
-        setStatus("denied");
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 12_000,
-        maximumAge: 60_000,
-      },
-    );
-
-    return () => {
-      cancelled = true;
-    };
-  }, [nonce]);
+    void refresh().catch(() => undefined);
+    return () => { generation.current += 1; };
+  }, [refresh]);
 
   return { location, status, refresh };
 }
